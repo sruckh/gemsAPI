@@ -26,6 +26,9 @@ Phase 1 (Single-Container Dockerization) has been completed. The application has
 - **Docker:** Created `Dockerfile` (multi-stage) and `docker-compose.yml` configured for the `shared_net` network.
 - **Ignore Files:** Updated `.gitignore` and `.dockerignore` to exclude `.serena/` and secrets.
 
+### 5. New Features (API-First)
+- **Execute Endpoint:** Added `POST /api/gems/execute` which accepts a `gem_name` and `user_prompt`. This allows external tools to invoke specific Gems by name, fetching their instructions dynamically from Supabase before generation.
+
 ## Deployment Instructions
 1. Create `.env` from `.env.example`.
 2. Run `docker compose up -d --build`.

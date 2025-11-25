@@ -31,13 +31,14 @@
   - `env_file: .env` and a volume for the built assets if needed.
   - Note: NPM defined elsewhere, also on `shared_net`, targets `gemsapi:8000`.
 - `.env.example` documenting required variables:
-  - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY` (Service Role), `PORT=8000`, `NODE_ENV=production`.
+  - `GEMINI_API_KEY`, `GEMINI_MODEL` (e.g. `gemini-3-pro-preview`), `SUPABASE_URL`, `SUPABASE_KEY` (Service Role), `PORT=8000`, `NODE_ENV=production`.
 - `docs/supabase/gems_table.sql`: The canonical DDL for `gems` table and RLS policies.
 - Backend updates:
   - Implement FastAPI routes that proxy Gemini and Supabase actions; move existing client-side Supabase/Gemini calls to backend.
   - Serve built `dist/` via FastAPI `StaticFiles`.
   - Ensure CORS configured for NPM host domain only.
   - Implement **Rate Limiting** (e.g., using `slowapi`) to prevent abuse of the generation endpoint.
+  - **New**: Implement `POST /api/gems/execute` for API-driven Gem execution by name.
 - Frontend updates:
   - Replace direct Supabase/Gemini calls with fetches to backend endpoints (no keys in client).
   - Build-time uses relative API base (`/api/...`) to work behind NPM.
@@ -51,13 +52,13 @@
 
 ## Implementation Steps
 1) **Create .dockerignore**
-   - Exclude: `node_modules`, `dist`, `build`, `*.pyc`, `__pycache__`, `.env`, `.git`, `.DS_Store`.
+   - Exclude: `node_modules`, `dist`, `build`, `*.pyc`, `__pycache__`, `.env`, `.git`, `.DS_Store`, `.serena`.
 2) **Create Dockerfile**
    - Stage 1 (builder): `node:20-alpine`, install npm deps, run `npm run build`.
-   - Stage 2 (runner): `python:3.12-slim`, install `fastapi`, `uvicorn`, `google-generativeai`, `supabase`, `python-dotenv`, `aiofiles`, `slowapi`, etc. Copy `dist/` and backend code. Set `PORT=8000`, `UVICORN_CMD`.
+   - Stage 2 (runner): `python:3.12-slim`, install `fastapi`, `uvicorn`, `google-genai`, `supabase`, `python-dotenv`, `aiofiles`, `slowapi`, etc. Copy `dist/` and backend code. Set `PORT=8000`, `UVICORN_CMD`.
    - Add non-root user, set `WORKDIR /app`, `EXPOSE 8000` (for documentation only).
 3) **FastAPI app build-out**
-   - Implement API routes: `/api/gems` CRUD (via Supabase client), `/api/gemini/generate` to call Google AI.
+   - Implement API routes: `/api/gems` CRUD, `/api/gemini/generate` (free-form), and `/api/gems/execute` (named gem execution).
    - **Security**: Load env vars securely; disable any echoing of secrets in logs.
    - **Resilience**: Implement a `/healthz` endpoint (returns 200 OK) for container orchestration/NPM checks.
    - Mount `dist/` as static, default route serves `index.html`.
@@ -86,40 +87,3 @@
 - Container runs on `shared_net` with only internal exposure; reachable from NPM.
 - Frontend functions (Gem CRUD, chat) through backend proxies; secrets never appear in browser dev tools.
 - Supabase table creation succeeds via provided SQL; app operates against it.
-
-## Supabase Security/Implementation Review (current state)
-- **Exists?**: Supabase integration currently lives in `services/dbService.ts` (frontend). `fastapi_server.py` is empty; no backend proxy exists.
-- **Security**: Insecure. Supabase URL/key are read from localStorage/config and used directly in the browser, exposing secrets to users and dev tools. No RLS-aware access pattern; keys appear to be anon/service keys from client side.
-- **Implementation gaps**:
-  - All Supabase calls are client-side; must be moved server-side.
-  - No error handling for network/auth beyond console logging.
-  - `supabase_schema.sql` in repo is corrupted/garbled and unusable; replace with `docs/supabase/gems_table.sql`.
-  - RLS not configured beyond defaults; policies needed for service-role-only access.
-
-## Required Improvements (add to Phase 1 scope)
-1) **Backend-only Supabase client**: Instantiate Supabase with service key inside FastAPI; expose CRUD REST endpoints consumed by the React app. Remove/replace `services/dbService.ts` with thin fetch client hitting `/api/gems`.
-2) **Secret handling**: Remove storing Supabase keys in localStorage/UI settings. Load from environment only; do not ship to browser. Validate no bundler inlines env vars into JS.
-3) **RLS hardening**: Enable RLS on `public.gems`; create service-role policy (already in `docs/supabase/gems_table.sql`). Ensure anon key (if ever used) has zero table access.
-4) **Schema file replacement**: Delete/ignore corrupted `supabase_schema.sql`; direct users to `docs/supabase/gems_table.sql` as the canonical script.
-5) **Error/Logging**: Sanitize logs (no secrets). Standardize error responses from FastAPI endpoints.
-6) **Testing**: Add integration check in Phase 1 validation: call FastAPI `/api/gems` from inside container to ensure Supabase connectivity using env secrets, and confirm browser cannot see keys via dev tools.
-7) **FastAPI hardening**: See “FastAPI notes” below—ensure secure defaults when running behind Nginx Proxy Manager.
-
-## FastAPI Review & Recommendations (current state: file empty)
-- Implement FastAPI app to:
-  - Serve static React build via `StaticFiles` and fallback `index.html`.
-  - Provide `/api/gems` CRUD routes that use a server-side Supabase client (service key from env).
-  - Provide `/api/gemini/generate` route that calls Google AI using server-held API key.
-- Security & deployment considerations for container behind NPM:
-  - Run `uvicorn` bound to `0.0.0.0:8000`; do **not** publish host ports—only `expose 8000` for NPM on `shared_net`.
-  - Respect proxy headers: run uvicorn with `--proxy-headers` or set `proxy_headers=True` in `Config` so scheme/host are preserved for redirects/CORS.
-  - **Trusted Proxies**: Configure `forwarded_allow_ips` (e.g., `*` if on a private docker network, or specific NPM container IP) to ensure headers are trusted.
-  - CORS: whitelist only the public domain served by NPM (and optionally localhost for dev), not `*`.
-  - Disable docs in production (e.g., `docs_url=None` if `NODE_ENV=production`) to avoid exposing schema.
-  - Avoid leaking secrets in exceptions; use structured error responses and log sanitization.
-  - Configure health endpoint (`/healthz`) for NPM/upstreams.
-  - Use a non-root user in the image; drop capabilities where possible.
-  - Prefer `uvicorn --workers 2` (or via `gunicorn -k uvicorn.workers.UvicornWorker`) for concurrency; keep memory footprint modest.
-  - Set reasonable timeouts to prevent hanging upstream connections.
-  - Validate inputs server-side (pydantic models) to prevent untrusted payloads reaching Supabase/Google APIs.
-  - Rate-limit (e.g., using `slowapi`) the generation endpoint to prevent quota exhaustion.
