@@ -32,3 +32,6 @@ env/
 *.njsproj
 *.sln
 *.sw?
+
+# Serena
+.serena/

@@ -44,7 +44,7 @@ const GemChat: React.FC<GemChatProps> = ({ gems, config }) => {
     try {
       const responseText = await generateGemResponse(
         config.geminiApiKey,
-        'gemini-3-pro-preview',
+        '', // Let backend use default model (GEMINI_MODEL env var)
         selectedGem.instructions,
         userMsg.text
       );

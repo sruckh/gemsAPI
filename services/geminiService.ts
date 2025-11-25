@@ -1,31 +1,30 @@
-import { GoogleGenAI } from "@google/genai";
-
 export const generateGemResponse = async (
   apiKey: string,
   modelName: string,
   systemInstructions: string,
   userPrompt: string
 ): Promise<string> => {
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Please check settings.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
-  
-  // As per instructions: Use gemini-3-pro-preview for complex tasks (Gems usually are)
-  // Or gemini-2.5-flash for speed. The prompt requested "Gemini Pro".
-  const effectiveModel = modelName || 'gemini-3-pro-preview';
+  // The apiKey param is ignored as the backend handles it securely.
+  // modelName is optional; if not provided, the backend uses its configured default (GEMINI_MODEL).
 
   try {
-    const response = await ai.models.generateContent({
-      model: effectiveModel,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemInstructions,
-      }
+    const response = await fetch('/api/gemini/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model_name: modelName || undefined,
+        system_instructions: systemInstructions,
+        user_prompt: userPrompt
+      })
     });
 
-    return response.text || "No response generated.";
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || "Failed to generate content.");
+    }
+
+    const data = await response.json();
+    return data.text || "No response generated.";
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     throw new Error(error.message || "Failed to communicate with Gemini.");

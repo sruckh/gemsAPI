@@ -1,4 +1,3 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Gem, AppConfig } from '../types';
 
 // Mock data for local storage initialization
@@ -19,46 +18,17 @@ const INITIAL_GEMS: Gem[] = [
   }
 ];
 
-let supabase: SupabaseClient | null = null;
-
-export const initSupabase = (url: string, key: string) => {
-  if (url && key) {
-    try {
-      supabase = createClient(url, key);
-    } catch (e) {
-      console.error("Failed to init supabase", e);
-      supabase = null;
-    }
-  } else {
-    supabase = null;
-  }
-};
-
-export const testSupabaseConnection = async (url: string, key: string): Promise<boolean> => {
-  try {
-    const client = createClient(url, key);
-    // Try to fetch a single row or just count to verify connection
-    const { error } = await client.from('gems').select('count', { count: 'exact', head: true });
-    return !error;
-  } catch (e) {
-    console.error("Supabase connection test failed:", e);
-    return false;
-  }
-};
-
 // Helper to simulate DB delay for local storage
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const getGems = async (config: AppConfig): Promise<Gem[]> => {
-  // Mode 1: Supabase
-  if (!config.useLocalStorage && supabase) {
-    const { data, error } = await supabase
-      .from('gems')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data as Gem[];
+  // Mode 1: API (Backend)
+  if (!config.useLocalStorage) {
+    const response = await fetch('/api/gems');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch gems: ${response.statusText}`);
+    }
+    return await response.json();
   }
 
   // Mode 2: LocalStorage
@@ -78,18 +48,16 @@ export const createGem = async (gem: Omit<Gem, 'id' | 'created_at'>, config: App
     created_at: new Date().toISOString()
   };
 
-  if (!config.useLocalStorage && supabase) {
-    // We intentionally ignore the ID we generated and let Supabase gen one usually, 
-    // but for simplicity here we pass it or let the DB handle it. 
-    // Let's send everything except ID if DB is auto-gen, but here we assume the table accepts inserts.
-    const { data, error } = await supabase
-      .from('gems')
-      .insert([ gem ]) // Let supabase generate ID/Timestamp usually, but if table is basic:
-      .select()
-      .single();
-      
-    if (error) throw error;
-    return data as Gem;
+  if (!config.useLocalStorage) {
+    const response = await fetch('/api/gems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newGem)
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to create gem: ${response.statusText}`);
+    }
+    return await response.json();
   }
 
   // Local Storage
@@ -101,16 +69,16 @@ export const createGem = async (gem: Omit<Gem, 'id' | 'created_at'>, config: App
 };
 
 export const updateGem = async (gem: Gem, config: AppConfig): Promise<Gem> => {
-  if (!config.useLocalStorage && supabase) {
-    const { data, error } = await supabase
-      .from('gems')
-      .update({ name: gem.name, description: gem.description, instructions: gem.instructions })
-      .eq('id', gem.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as Gem;
+  if (!config.useLocalStorage) {
+    const response = await fetch(`/api/gems/${gem.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(gem)
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update gem: ${response.statusText}`);
+    }
+    return await response.json();
   }
 
   // Local Storage
@@ -122,13 +90,13 @@ export const updateGem = async (gem: Gem, config: AppConfig): Promise<Gem> => {
 };
 
 export const deleteGem = async (id: string, config: AppConfig): Promise<void> => {
-  if (!config.useLocalStorage && supabase) {
-    const { error } = await supabase
-      .from('gems')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+  if (!config.useLocalStorage) {
+    const response = await fetch(`/api/gems/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete gem: ${response.statusText}`);
+    }
     return;
   }
 

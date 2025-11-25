@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+*.pyc
+__pycache__
+.env
+.git
+.DS_Store
+.venv
+venv
+coverage
+.pytest_cache
+.serena

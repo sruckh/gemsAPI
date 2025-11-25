@@ -13,10 +13,8 @@ export interface ChatMessage {
 }
 
 export interface AppConfig {
-  geminiApiKey: string;
-  supabaseUrl: string;
-  supabaseKey: string;
-  useLocalStorage: boolean; // Fallback if no supabase credentials
+  useLocalStorage: boolean;
+  // Removed sensitive keys as they are now managed backend-side
 }
 
 export type ViewMode = 'manager' | 'chat' | 'settings';

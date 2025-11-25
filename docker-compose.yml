@@ -1,0 +1,15 @@
+services:
+  gemsapi:
+    build: .
+    container_name: gemsapi
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "8000"
+    networks:
+      - shared_net
+
+networks:
+  shared_net:
+    external: true
