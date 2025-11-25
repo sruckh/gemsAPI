@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Gems Manager",
+  "description": "A full-stack application (React + FastAPI) to manage and execute custom Gemini Gems. Features a Supabase backend for Gem storage and Gemini Pro for execution.",
+  "requestFramePermissions": []
+}
