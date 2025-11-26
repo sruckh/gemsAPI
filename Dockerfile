@@ -1,13 +1,13 @@
 # Stage 1: Builder
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Update npm to latest version and install dependencies
+RUN npm install -g npm@11.6.4 && npm install
 
 # Copy source code
 COPY . .
@@ -30,8 +30,9 @@ COPY --from=builder /app/dist /app/dist
 # Copy backend requirements
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Upgrade pip and install Python dependencies
+RUN pip install --upgrade --root-user-action=ignore pip==25.3 && \
+    pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
 
 # Copy backend code
 COPY fastapi_server.py .

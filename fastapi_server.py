@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +14,7 @@ from google.genai import types
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -59,7 +61,7 @@ else:
         logger.error(f"Failed to initialize Gemini client: {e}")
         gemini_client = None
 
-# Models
+# --- Models ---
 class GemModel(BaseModel):
     id: Optional[str] = None
     name: str
@@ -72,7 +74,12 @@ class GenerateRequest(BaseModel):
     system_instructions: str
     user_prompt: str
 
-# Middleware
+class ExecuteGemRequest(BaseModel):
+    gem_name: str
+    user_prompt: str
+    model_name: Optional[str] = DEFAULT_GEMINI_MODEL
+
+# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -81,12 +88,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health Check
+# --- Helpers ---
+def clean_thought_text(text: str) -> str:
+    """
+    Removes the model's internal thinking tags (<thought>...</thought> and <Sig_X>)
+    from the generated text, as these cannot be disabled in the Gemini 3 API.
+
+    Args:
+        text: The raw response text from the model.
+
+    Returns:
+        The cleaned text, suitable for display to the end-user.
+    """
+    # 1. Remove the standard <ctrl3348>...</thought> tags and content
+    cleaned_text = re.sub(r'<ctrl3348>.*?</thought>', '', text, flags=re.DOTALL)
+
+    # 2. Remove any thought signatures (e.g., <Sig_A> or <Sig_B>)
+    cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
+
+    # Clean up excessive whitespace or newlines left by the removal
+    cleaned_text = cleaned_text.strip()
+    return cleaned_text
+
+async def generate_gemini_response(model_name: str, system_instructions: str, user_prompt: str) -> str:
+    """
+    Reusable helper to generate content from Gemini, handling thinking config and response parsing.
+    """
+    if not gemini_client:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
+    try:
+        # Configure generation with LOW thinking level for faster, lower-latency responses
+        config = types.GenerateContentConfig(
+            system_instruction=system_instructions
+        )
+
+        # Enable LOW thinking level for Gemini 3.0+ models
+        # This reduces the model's internal reasoning depth for better performance
+        if model_name and "gemini-3" in model_name.lower():
+             config.thinking_config = types.ThinkingConfig(
+                 thinking_level=types.ThinkingLevel.LOW,
+                 include_thoughts=True
+             )
+
+        response = await gemini_client.aio.models.generate_content(
+            model=model_name,
+            contents=user_prompt,
+            config=config
+        )
+
+        # Get the raw response text
+        raw_text = response.text if response.text else ""
+
+        # Clean the response to remove internal thinking tags
+        final_output = clean_thought_text(raw_text)
+
+        return final_output
+
+    except Exception as e:
+        logger.error(f"Gemini API Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to generate content")
+
+# --- API Routes ---
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
 
-# API Routes
 @app.get("/api/gems", response_model=List[GemModel])
 async def get_gems():
     if not supabase:
@@ -141,54 +210,45 @@ async def delete_gem(gem_id: str):
         logger.error(f"Error deleting gem: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# Raw Generation Endpoint (Free-form)
 @app.post("/api/gemini/generate")
 @limiter.limit("5/minute")
 async def generate_content(request: Request, body: GenerateRequest):
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail="AI service unavailable")
+    text = await generate_gemini_response(
+        model_name=body.model_name,
+        system_instructions=body.system_instructions,
+        user_prompt=body.user_prompt
+    )
+    return {"text": text}
+
+# Named Gem Execution Endpoint (API-First Feature)
+@app.post("/api/gems/execute")
+@limiter.limit("5/minute")
+async def execute_gem_by_name(request: Request, body: ExecuteGemRequest):
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
 
     try:
-        # Configure generation
-        config = types.GenerateContentConfig(
-            system_instruction=body.system_instructions
-        )
-
-        # Enable thinking capabilities for Gemini 3.0+ models
-        # This is a heuristic based on the model name string
-        if body.model_name and "gemini-3" in body.model_name.lower():
-             config.thinking_config = types.ThinkingConfig(include_thoughts=True)
-
-        response = await gemini_client.aio.models.generate_content(
-            model=body.model_name,
-            contents=body.user_prompt,
-            config=config
-        )
-
-        # Construct response text including thoughts if present
-        final_output = ""
+        # Lookup Gem by name (case-sensitive usually, depending on DB collation)
+        response = supabase.table("gems").select("instructions").eq("name", body.gem_name).limit(1).execute()
         
-        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                # Check if this part is a "thought"
-                # The SDK might expose this as a property 'thought' (boolean) on the part object
-                # per the user provided sample: "if part.thought: ..."
-                if hasattr(part, 'thought') and part.thought:
-                    # Format thoughts as a blockquote for the frontend markdown renderer
-                    final_output += f"> **Thinking Process:**\n> {part.text.replace(chr(10), chr(10) + '> ')}\n\n"
-                elif part.text:
-                    final_output += part.text
-        else:
-            # Fallback if no parts structure matches (or standard response)
-            final_output = response.text if response.text else ""
-
-        return {"text": final_output}
-
+        if not response.data:
+             raise HTTPException(status_code=404, detail=f"Gem '{body.gem_name}' not found")
+        
+        instructions = response.data[0]['instructions']
+        
     except Exception as e:
-        logger.error(f"Gemini API Error: {e}")
-        # It's often helpful to log the exact error for debugging new SDKs
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Failed to generate content")
+        logger.error(f"Error looking up gem '{body.gem_name}': {e}")
+        raise HTTPException(status_code=500, detail="Database lookup failed")
+
+    # Generate response using the retrieved instructions
+    text = await generate_gemini_response(
+        model_name=body.model_name,
+        system_instructions=instructions,
+        user_prompt=body.user_prompt
+    )
+    
+    return {"text": text}
 
 # Static Files - Serve React App
 if os.path.exists("dist"):
