@@ -12,9 +12,13 @@ RUN npm install -g npm@11.6.4 && npm install
 # Copy source code
 COPY . .
 
+# Build arguments for Vite
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
 # Build the frontend
 # Note: ensuring no sensitive VITE_ env vars are present
-RUN npm run build
+RUN VITE_SUPABASE_URL=$VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY npm run build
 
 # Stage 2: Runner
 FROM python:3.12-slim

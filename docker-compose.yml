@@ -1,6 +1,10 @@
 services:
   gemsapi:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_KEY}
     container_name: gemsapi
     restart: unless-stopped
     env_file:

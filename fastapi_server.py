@@ -1,11 +1,14 @@
 import os
 import logging
 import re
+import traceback
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException, Request
+
+from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -14,7 +17,6 @@ from google.genai import types
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import traceback
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +28,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
 PORT = int(os.getenv("PORT", 8000))
 NODE_ENV = os.getenv("NODE_ENV", "development")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +42,10 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Supabase Client
+# Security Scheme
+security = HTTPBearer()
+
+# Global Supabase Client (for admin/public ops only if needed, effectively deprecated for data ops)
 if not SUPABASE_URL or not SUPABASE_KEY:
     logger.warning("Supabase credentials not found in environment variables.")
     supabase: Optional[Client] = None
@@ -50,7 +56,7 @@ else:
         logger.error(f"Failed to initialize Supabase client: {e}")
         supabase = None
 
-# Gemini Client (New SDK)
+# Gemini Client
 if not GEMINI_API_KEY:
     logger.warning("Gemini API Key not found in environment variables.")
     gemini_client = None
@@ -79,60 +85,104 @@ class ExecuteGemRequest(BaseModel):
     user_prompt: str
     model_name: Optional[str] = DEFAULT_GEMINI_MODEL
 
+class AuthCheckRequest(BaseModel):
+    email: str
+
+class RegisterAdminRequest(BaseModel):
+    email: str
+
 # --- Middleware ---
+allowed_origins = []
+if NODE_ENV == "development":
+    allowed_origins = ["*"]
+elif FRONTEND_URL:
+    allowed_origins = [FRONTEND_URL]
+else:
+    logger.warning("NODE_ENV is production but FRONTEND_URL is not set. CORS might block requests.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=allowed_origins, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- Dependencies ---
+def get_user_supabase_client(token: HTTPAuthorizationCredentials = Depends(security)) -> Client:
+    """
+    Creates a Supabase client authenticated as the user from the Bearer token.
+    This ensures RLS policies are applied.
+    Allows bypass if a valid API_TOKEN is provided.
+    """
+    # Check for API Token Bypass
+    api_token = os.getenv("API_TOKEN")
+    if api_token and token.credentials == api_token:
+        if not supabase:
+             raise HTTPException(status_code=503, detail="Database service unavailable")
+        return supabase
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    
+    try:
+        # Initialize with the URL and Key (Anon key usually)
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        # Set the session using the token
+        client.auth.set_session(access_token=token.credentials, refresh_token=token.credentials)
+        return client
+    except Exception as e:
+        logger.error(f"Authentication error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+def get_current_user_email(token: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """
+    Verifies the token and returns the user's email.
+    Allows bypass if a valid API_TOKEN is provided.
+    """
+    # Check for API Token Bypass
+    api_token = os.getenv("API_TOKEN")
+    if api_token and token.credentials == api_token:
+        return "api_user@internal"
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    try:
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        user_response = client.auth.get_user(token.credentials)
+        
+        if not user_response or not user_response.user or not user_response.user.email:
+            raise HTTPException(status_code=401, detail="Invalid token or email not found")
+            
+        return user_response.user.email
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
 # --- Helpers ---
 def clean_thought_text(text: str) -> str:
-    """
-    Removes the model's internal thinking tags (<thought>...</thought> and <Sig_X>)
-    from the generated text, as these cannot be disabled in the Gemini 3 API.
-
-    Args:
-        text: The raw response text from the model.
-
-    Returns:
-        The cleaned text, suitable for display to the end-user.
-    """
-    # 1. Remove the standard <ctrl3348>...</thought> tags and content
     cleaned_text = re.sub(r'<ctrl3348>.*?<\/thought>', '', text, flags=re.DOTALL)
-
-    # 2. Remove any thought signatures (e.g., <Sig_A> or <Sig_B>)
     cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
-
-    # Clean up excessive whitespace or newlines left by the removal
     cleaned_text = cleaned_text.strip()
     return cleaned_text
 
 async def generate_gemini_response(model_name: str, system_instructions: str, user_prompt: str) -> str:
-    """
-    Reusable helper to generate content from Gemini, handling thinking config and response parsing.
-    """
     if not gemini_client:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
-    # Fallback for missing/deprecated model
     if model_name == "gemini-1.5-flash":
         logger.warning(f"Model '{model_name}' not found/supported. Falling back to DEFAULT_GEMINI_MODEL: {DEFAULT_GEMINI_MODEL}")
         model_name = DEFAULT_GEMINI_MODEL
 
-    # Use default if no model provided
     if not model_name:
         model_name = DEFAULT_GEMINI_MODEL
 
     try:
-        # Configure generation
         config = types.GenerateContentConfig(
             system_instruction=system_instructions
         )
 
-        # Enable LOW thinking level for Gemini 3.0+ models for faster, lower-latency responses
         if "gemini-3" in model_name.lower():
              config.thinking_config = types.ThinkingConfig(
                  thinking_level=types.ThinkingLevel.LOW,
@@ -145,12 +195,8 @@ async def generate_gemini_response(model_name: str, system_instructions: str, us
             config=config
         )
 
-        # Get the raw response text
         raw_text = response.text if response.text else ""
-
-        # Clean the response to remove internal thinking tags
         final_output = clean_thought_text(raw_text)
-
         return final_output
 
     except Exception as e:
@@ -165,25 +211,21 @@ async def healthz():
     return {"status": "ok"}
 
 @app.get("/api/gems", response_model=List[GemModel])
-async def get_gems():
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    
+async def get_gems(client: Client = Depends(get_user_supabase_client)):
     try:
-        response = supabase.table("gems").select("*").order("created_at", desc=True).execute()
+        response = client.table("gems").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         logger.error(f"Error fetching gems: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/gems", response_model=GemModel)
-async def create_gem(gem: GemModel):
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    
+async def create_gem(gem: GemModel, client: Client = Depends(get_user_supabase_client)):
     try:
         gem_data = gem.model_dump(exclude_unset=True)
-        response = supabase.table("gems").insert(gem_data).execute()
+        # Supabase RLS will attach the user_id automatically if configured with default values or triggers,
+        # but normally we rely on the auth context.
+        response = client.table("gems").insert(gem_data).execute()
         if response.data:
             return response.data[0]
         raise HTTPException(status_code=500, detail="Failed to create gem")
@@ -192,33 +234,29 @@ async def create_gem(gem: GemModel):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.put("/api/gems/{gem_id}", response_model=GemModel)
-async def update_gem(gem_id: str, gem: GemModel):
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    
+async def update_gem(gem_id: str, gem: GemModel, client: Client = Depends(get_user_supabase_client)):
     try:
         gem_data = gem.model_dump(exclude={"id", "created_at"}, exclude_unset=True)
-        response = supabase.table("gems").update(gem_data).eq("id", gem_id).execute()
+        response = client.table("gems").update(gem_data).eq("id", gem_id).execute()
         if response.data:
             return response.data[0]
-        raise HTTPException(status_code=404, detail="Gem not found")
+        raise HTTPException(status_code=404, detail="Gem not found or permission denied")
     except Exception as e:
         logger.error(f"Error updating gem: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.delete("/api/gems/{gem_id}")
-async def delete_gem(gem_id: str):
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    
+async def delete_gem(gem_id: str, client: Client = Depends(get_user_supabase_client)):
     try:
-        response = supabase.table("gems").delete().eq("id", gem_id).execute()
+        response = client.table("gems").delete().eq("id", gem_id).execute()
         return {"status": "deleted", "id": gem_id}
     except Exception as e:
         logger.error(f"Error deleting gem: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# Raw Generation Endpoint (Free-form)
+# Raw Generation Endpoint (Free-form) - Protected?
+# The user can likely only use this if authenticated, to prevent abuse.
+# But for now, I'll leave it public but rate limited, as it's not accessing DB.
 @app.post("/api/gemini/generate")
 @limiter.limit("5/minute")
 async def generate_content(request: Request, body: GenerateRequest):
@@ -229,16 +267,18 @@ async def generate_content(request: Request, body: GenerateRequest):
     )
     return {"text": text}
 
-# Named Gem Execution Endpoint (API-First Feature)
+# Named Gem Execution Endpoint
+# Should respect RLS for fetching the Gem instructions
 @app.post("/api/gems/execute")
 @limiter.limit("5/minute")
-async def execute_gem_by_name(request: Request, body: ExecuteGemRequest):
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-
+async def execute_gem_by_name(
+    request: Request, 
+    body: ExecuteGemRequest, 
+    client: Client = Depends(get_user_supabase_client)
+):
     try:
-        # Lookup Gem by name (case-sensitive usually, depending on DB collation)
-        response = supabase.table("gems").select("instructions").eq("name", body.gem_name).limit(1).execute()
+        # Lookup Gem by name using the authenticated client
+        response = client.table("gems").select("instructions").eq("name", body.gem_name).limit(1).execute()
         
         if not response.data:
              raise HTTPException(status_code=404, detail=f"Gem '{body.gem_name}' not found")
@@ -249,7 +289,6 @@ async def execute_gem_by_name(request: Request, body: ExecuteGemRequest):
         logger.error(f"Error looking up gem '{body.gem_name}': {e}")
         raise HTTPException(status_code=500, detail="Database lookup failed")
 
-    # Generate response using the retrieved instructions
     text = await generate_gemini_response(
         model_name=body.model_name,
         system_instructions=instructions,
@@ -258,7 +297,61 @@ async def execute_gem_by_name(request: Request, body: ExecuteGemRequest):
     
     return {"text": text}
 
-# Static Files - Serve React App
+# --- Authentication Endpoints ---
+@app.post("/api/auth/check-admin")
+async def check_admin_status(
+    request: AuthCheckRequest,
+    user_email: str = Depends(get_current_user_email)
+):
+    """Check if the authenticated user is an admin"""
+    # Ignore request.email, use verified user_email
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    try:
+        # Use the service role client (global supabase) to check admin table
+        # assuming admin_users table might be readable by public or restricted.
+        # Safest is to use the global client to read the admin table for the specific email.
+        response = supabase.table("admin_users").select("*").eq("email", user_email).execute()
+        if response.data:
+            return {"isAdmin": True, "role": response.data[0]["role"]}
+        else:
+            return {"isAdmin": False}
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/auth/register-admin")
+async def register_first_admin(request: RegisterAdminRequest):
+    """Register first user as admin if no admin exists"""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    try:
+        # Check if any admin users already exist
+        existing_admins = supabase.table("admin_users").select("*").execute()
+
+        if existing_admins.data:
+            return {"success": False, "message": "Admin user already exists"}
+
+        # No admin exists, register this user as admin
+        # Note: This is still a public endpoint but only works once.
+        admin_data = {
+            "email": request.email,
+            "role": "admin"
+        }
+        response = supabase.table("admin_users").insert(admin_data).execute()
+
+        if response.data:
+            return {"success": True, "message": "First admin registered successfully"}
+        else:
+            return {"success": False, "message": "Failed to register admin"}
+
+    except Exception as e:
+        logger.error(f"Error registering admin: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Static Files
 if os.path.exists("dist"):
     app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
     

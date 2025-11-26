@@ -1,4 +1,5 @@
 import { Gem, AppConfig } from '../types';
+import { getGemsWithAuth, createGemWithAuth, updateGemWithAuth, deleteGemWithAuth } from './authService';
 
 // Mock data for local storage initialization
 const INITIAL_GEMS: Gem[] = [
@@ -22,13 +23,9 @@ const INITIAL_GEMS: Gem[] = [
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const getGems = async (config: AppConfig): Promise<Gem[]> => {
-  // Mode 1: API (Backend)
+  // Mode 1: API (Backend via Auth Service)
   if (!config.useLocalStorage) {
-    const response = await fetch('/api/gems');
-    if (!response.ok) {
-      throw new Error(`Failed to fetch gems: ${response.statusText}`);
-    }
-    return await response.json();
+    return await getGemsWithAuth(config);
   }
 
   // Mode 2: LocalStorage
@@ -42,26 +39,19 @@ export const getGems = async (config: AppConfig): Promise<Gem[]> => {
 };
 
 export const createGem = async (gem: Omit<Gem, 'id' | 'created_at'>, config: AppConfig): Promise<Gem> => {
+  // Mode 1: API
+  if (!config.useLocalStorage) {
+    return await createGemWithAuth(gem, config);
+  }
+
+  // Mode 2: Local Storage
+  await delay(300);
   const newGem = {
     ...gem,
     id: crypto.randomUUID(),
     created_at: new Date().toISOString()
   };
-
-  if (!config.useLocalStorage) {
-    const response = await fetch('/api/gems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newGem)
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to create gem: ${response.statusText}`);
-    }
-    return await response.json();
-  }
-
-  // Local Storage
-  await delay(300);
+  
   const stored = JSON.parse(localStorage.getItem('gemini_gems_data') || '[]');
   const updated = [newGem, ...stored];
   localStorage.setItem('gemini_gems_data', JSON.stringify(updated));
@@ -69,19 +59,12 @@ export const createGem = async (gem: Omit<Gem, 'id' | 'created_at'>, config: App
 };
 
 export const updateGem = async (gem: Gem, config: AppConfig): Promise<Gem> => {
+  // Mode 1: API
   if (!config.useLocalStorage) {
-    const response = await fetch(`/api/gems/${gem.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(gem)
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to update gem: ${response.statusText}`);
-    }
-    return await response.json();
+    return await updateGemWithAuth(gem, config);
   }
 
-  // Local Storage
+  // Mode 2: Local Storage
   await delay(300);
   const stored = JSON.parse(localStorage.getItem('gemini_gems_data') || '[]');
   const updated = stored.map((g: Gem) => g.id === gem.id ? gem : g);
@@ -90,17 +73,12 @@ export const updateGem = async (gem: Gem, config: AppConfig): Promise<Gem> => {
 };
 
 export const deleteGem = async (id: string, config: AppConfig): Promise<void> => {
+  // Mode 1: API
   if (!config.useLocalStorage) {
-    const response = await fetch(`/api/gems/${id}`, {
-      method: 'DELETE'
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to delete gem: ${response.statusText}`);
-    }
-    return;
+    return await deleteGemWithAuth(id, config);
   }
 
-  // Local Storage
+  // Mode 2: Local Storage
   await delay(300);
   const stored = JSON.parse(localStorage.getItem('gemini_gems_data') || '[]');
   const updated = stored.filter((g: Gem) => g.id !== id);

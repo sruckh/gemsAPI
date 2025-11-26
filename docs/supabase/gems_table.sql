@@ -35,6 +35,47 @@ begin
   end if;
 end$$;
 
+-- Admin users table for authentication
+create table if not exists public.admin_users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  role text not null default 'admin' check (role in ('admin', 'super_admin')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Index for admin users
+create index if not exists idx_admin_users_email on public.admin_users (email);
+
+-- RLS for admin_users - allow service role full access
+alter table public.admin_users enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'admin_users' and policyname = 'service_role_all'
+  ) then
+    create policy service_role_all on public.admin_users
+      for all
+      using (auth.role() = 'service_role')
+      with check (auth.role() = 'service_role');
+  end if;
+end$$;
+
+-- Function to automatically update updated_at timestamp
+create or replace function public.update_updated_at_column()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to auto-update updated_at for admin_users
+create trigger trigger_admin_users_updated_at
+  before update on public.admin_users
+  for each row execute procedure update_updated_at_column();
+
 -- Seed data (optional)
 -- insert into public.gems (name, description, instructions) values
 -- ('Python Expert', 'A helpful coding assistant specializing in Python best practices.', 'You are an expert Python developer...'),

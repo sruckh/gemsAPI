@@ -3,15 +3,17 @@ import { ViewMode, Gem, AppConfig } from './types';
 import { getGems } from './services/dbService';
 import GemManager from './components/GemManager';
 import GemChat from './components/GemChat';
-import { LayoutGrid, MessageSquare, Settings, Moon, Sun } from 'lucide-react';
+import { LayoutGrid, MessageSquare, Settings, Moon, Sun, LogIn, LogOut, User } from 'lucide-react';
 import Button from './components/Button';
 import Modal from './components/Modal';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { authState, signIn, signOut } = useAuth();
   const [currentView, setCurrentView] = useState<ViewMode>('manager');
   const [gems, setGems] = useState<Gem[]>([]);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  
+
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -65,9 +67,55 @@ const App: React.FC = () => {
     setTimeout(refreshGems, 100); 
   };
 
+  // Show loading state while checking authentication
+  if (authState.loading) {
+    return (
+      <div className="flex h-screen bg-[#f8f9fa] dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden font-sans transition-colors duration-200">
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 border-t-transparent"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login screen if not authenticated
+  if (!authState.user) {
+    return (
+      <div className="flex h-screen bg-[#f8f9fa] dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden font-sans transition-colors duration-200">
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center max-w-md mx-auto p-8">
+             <img src="/android-chrome-192x192.png" alt="GeminiGems" className="w-16 h-16 mx-auto mb-4" />
+             <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+               Gemini<span className="text-google-blue">A</span>
+               <span className="text-google-red">P</span>
+               <span className="text-google-yellow">I</span>
+             </h1>
+             <p className="text-gray-600 dark:text-gray-400 mb-8">
+               Sign in to manage your AI gems and prompts
+             </p>
+             <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+               First user to sign in becomes administrator
+             </p>
+             <Button
+               onClick={signIn}
+               disabled={authState.loading}
+               className="w-full"
+             >
+               <LogIn size={20} className="mr-2" />
+               {authState.loading ? 'Signing in...' : 'Sign in with Google'}
+             </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-[#f8f9fa] dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden font-sans transition-colors duration-200">
-      
+
       {/* Sidebar Navigation */}
       <aside className="w-20 lg:w-64 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors duration-200">
         <div className="h-16 flex items-center justify-center lg:justify-start lg:px-6">
@@ -110,8 +158,15 @@ const App: React.FC = () => {
           </button>
         </nav>
 
-        <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2">
-           <button
+        <div className="flex-1 p-4 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2">
+          <div className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400">
+            <User size={16} />
+            <span className="text-sm font-medium truncate">
+              {authState.user?.email}
+            </span>
+          </div>
+
+          <button
             onClick={toggleTheme}
             className="flex items-center justify-center lg:justify-start w-full p-2 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
@@ -127,6 +182,15 @@ const App: React.FC = () => {
           >
             <Settings size={20} />
             <span className="hidden lg:block ml-4 text-sm font-medium">Settings</span>
+          </button>
+
+          <button
+            onClick={signOut}
+            disabled={authState.loading}
+            className="flex items-center justify-center lg:justify-start w-full p-2 text-red-500 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="hidden lg:block ml-4 text-sm font-medium">Sign Out</span>
           </button>
         </div>
       </aside>
@@ -215,6 +279,15 @@ const SettingsModal: React.FC<{
         </div>
       </form>
     </Modal>
+  );
+};
+
+// Main App wrapper with AuthProvider
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
