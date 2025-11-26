@@ -101,7 +101,7 @@ def clean_thought_text(text: str) -> str:
         The cleaned text, suitable for display to the end-user.
     """
     # 1. Remove the standard <ctrl3348>...</thought> tags and content
-    cleaned_text = re.sub(r'<ctrl3348>.*?</thought>', '', text, flags=re.DOTALL)
+    cleaned_text = re.sub(r'<ctrl3348>.*?<\/thought>', '', text, flags=re.DOTALL)
 
     # 2. Remove any thought signatures (e.g., <Sig_A> or <Sig_B>)
     cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
@@ -117,15 +117,23 @@ async def generate_gemini_response(model_name: str, system_instructions: str, us
     if not gemini_client:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
+    # Fallback for missing/deprecated model
+    if model_name == "gemini-1.5-flash":
+        logger.warning(f"Model '{model_name}' not found/supported. Falling back to DEFAULT_GEMINI_MODEL: {DEFAULT_GEMINI_MODEL}")
+        model_name = DEFAULT_GEMINI_MODEL
+
+    # Use default if no model provided
+    if not model_name:
+        model_name = DEFAULT_GEMINI_MODEL
+
     try:
-        # Configure generation with LOW thinking level for faster, lower-latency responses
+        # Configure generation
         config = types.GenerateContentConfig(
             system_instruction=system_instructions
         )
 
-        # Enable LOW thinking level for Gemini 3.0+ models
-        # This reduces the model's internal reasoning depth for better performance
-        if model_name and "gemini-3" in model_name.lower():
+        # Enable LOW thinking level for Gemini 3.0+ models for faster, lower-latency responses
+        if "gemini-3" in model_name.lower():
              config.thinking_config = types.ThinkingConfig(
                  thinking_level=types.ThinkingLevel.LOW,
                  include_thoughts=True
