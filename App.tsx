@@ -3,7 +3,7 @@ import { ViewMode, Gem, AppConfig } from './types';
 import { getGems } from './services/dbService';
 import GemManager from './components/GemManager';
 import GemChat from './components/GemChat';
-import { LayoutGrid, MessageSquare, Settings, Sparkles, Moon, Sun } from 'lucide-react';
+import { LayoutGrid, MessageSquare, Settings, Moon, Sun } from 'lucide-react';
 import Button from './components/Button';
 import Modal from './components/Modal';
 
@@ -72,7 +72,7 @@ const App: React.FC = () => {
       <aside className="w-20 lg:w-64 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors duration-200">
         <div className="h-16 flex items-center justify-center lg:justify-start lg:px-6">
           <div className="flex items-center gap-2">
-             <Sparkles className="text-[#1a73e8] dark:text-blue-400" size={24} />
+             <img src="/android-chrome-192x192.png" alt="GeminiGems" className="w-8 h-8" />
              <span className="hidden lg:block font-normal text-xl text-gray-600 dark:text-gray-300 tracking-tight">
                Gemini<span className="font-medium text-gray-800 dark:text-white">Gems</span>
                <span className="ml-1 font-bold flex-inline text-sm align-top">
