@@ -79,6 +79,41 @@ begin
   end if;
 end$$;
 
+-- Policy: Users can read their own admin status (to support Gems RLS)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'admin_users' and policyname = 'admins_read_own_status'
+  ) then
+    create policy "admins_read_own_status" on public.admin_users
+      for select
+      using (email = auth.jwt() ->> 'email');
+  end if;
+end$$;
+
+-- Gems RLS
+-- Policy: Users can manage their own gems, Admins can manage ALL gems
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'gems' and policyname = 'users_and_admins_manage_gems'
+  ) then
+    create policy "users_and_admins_manage_gems" on public.gems
+      for all
+      using (
+        auth.uid() = user_id 
+        or 
+        (select count(*) from public.admin_users where email = auth.jwt() ->> 'email') > 0
+      )
+      with check (
+        auth.uid() = user_id 
+        or 
+        (select count(*) from public.admin_users where email = auth.jwt() ->> 'email') > 0
+      );
+  end if;
+end$$;
+
+
 -- Function to automatically update updated_at timestamp
 create or replace function public.update_updated_at_column()
 returns trigger as $$
