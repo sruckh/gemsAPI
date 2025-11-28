@@ -33,25 +33,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const lastProcessedUserId = useRef<string | null>(null)
 
   useEffect(() => {
+    console.log('[AuthContext] Initializing auth listener...')
+    
+    // Safety timeout: If Supabase doesn't respond within 3 seconds, stop loading
+    const timeoutId = setTimeout(() => {
+      setAuthState(prev => {
+        if (prev.loading) {
+          console.warn('[AuthContext] Auth check timed out. Forcing load completion.')
+          return { ...prev, loading: false }
+        }
+        return prev
+      })
+    }, 3000)
+
     // supabase.auth.onAuthStateChange handles the initial check and all subsequent auth events.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[AuthContext] Auth event: ${event}`, session?.user?.id)
       const currentUserId = session?.user?.id || null
 
       // Optimization: If user hasn't changed, skip re-fetching admin status.
       // This prevents double-firing on initial load (INITIAL_SESSION + SIGNED_IN).
       if (currentUserId === lastProcessedUserId.current) {
-        // If we are just starting up (loading=true), we might still want to ensure state is set,
-        // but usually onAuthStateChange fires reliably.
-        // If we are already loaded, we definitely skip.
-        if (!authState.loading) return
+        console.log('[AuthContext] User unchanged, skipping update.')
+        return
       }
 
       lastProcessedUserId.current = currentUserId
 
       if (session?.user) {
         try {
+          console.log('[AuthContext] User found, checking admin status...')
           // User is logged in, check admin status
           const isAdmin = await checkAdminStatus(session.user.email || '')
+          console.log(`[AuthContext] Admin status: ${isAdmin}`)
           
           setAuthState({
             user: {
@@ -75,6 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           })
         }
       } else {
+        console.log('[AuthContext] No user session.')
         // No session (logged out or initial load failed)
         setAuthState({
           user: null,
@@ -85,6 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     })
 
     return () => {
+      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
