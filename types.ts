@@ -18,3 +18,20 @@ export interface AppConfig {
 }
 
 export type ViewMode = 'manager' | 'chat' | 'settings';
+
+export interface User {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, any>;
+}
+
+export interface AuthState {
+  user: User | null;
+  loading: boolean;
+  isAdmin: boolean;
+}
+
+export interface AuthResponse {
+  user: User | null;
+  error?: string;
+}

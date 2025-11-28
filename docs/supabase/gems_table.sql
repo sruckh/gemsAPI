@@ -9,6 +9,7 @@ create extension if not exists "pgcrypto";
 -- Table definition
 create table if not exists public.gems (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) default auth.uid(),
   name text not null,
   description text,
   instructions text not null,
@@ -17,12 +18,13 @@ create table if not exists public.gems (
 
 -- Useful index for ordering/filtering
 create index if not exists idx_gems_created_at on public.gems (created_at desc);
+create index if not exists idx_gems_user_id on public.gems (user_id);
 
--- (Optional) Row Level Security
--- Enable RLS and allow service-role key (used by backend) full access.
--- If you plan to expose anon key, lock RLS down further; this app expects server-side service key access only.
+-- Row Level Security
+-- Enable RLS
 alter table public.gems enable row level security;
 
+-- Policy: Service Role (Backend System) has full access
 do $$
 begin
   if not exists (
@@ -34,6 +36,21 @@ begin
       with check (auth.role() = 'service_role');
   end if;
 end$$;
+
+-- Policy: Users can manage only their own gems
+-- This covers SELECT, INSERT, UPDATE, DELETE
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'gems' and policyname = 'users_manage_own_gems'
+  ) then
+    create policy "users_manage_own_gems" on public.gems
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end$$;
+
 
 -- Admin users table for authentication
 create table if not exists public.admin_users (
@@ -72,11 +89,20 @@ end;
 $$ language plpgsql;
 
 -- Trigger to auto-update updated_at for admin_users
+drop trigger if exists trigger_admin_users_updated_at on public.admin_users;
 create trigger trigger_admin_users_updated_at
   before update on public.admin_users
   for each row execute procedure update_updated_at_column();
 
--- Seed data (optional)
--- insert into public.gems (name, description, instructions) values
--- ('Python Expert', 'A helpful coding assistant specializing in Python best practices.', 'You are an expert Python developer...'),
--- ('Creative Writer', 'Helps brainstorm stories and improve creative writing flow.', 'You are a creative writing coach...');
+-- ==========================================
+-- MIGRATION HELPERS (For existing DBs)
+-- Run these if you are upgrading from a previous version
+-- ==========================================
+
+-- 1. Add user_id column if missing
+-- alter table public.gems add column if not exists user_id uuid references auth.users(id) default auth.uid();
+
+-- 2. Backfill user_id for existing gems (Optional: Assign to a specific user or leave null)
+-- update public.gems set user_id = 'YOUR_USER_ID' where user_id is null;
+
+-- 3. Apply new policies (Run the policy creation blocks above)

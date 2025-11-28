@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { Gem, AppConfig } from '../types'
+import { Gem, AppConfig, User, AuthState, AuthResponse } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -9,23 +9,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-export interface User {
-  id: string
-  email?: string
-  user_metadata?: Record<string, any>
-}
-
-export interface AuthState {
-  user: User | null
-  loading: boolean
-  isAdmin: boolean
-}
-
-export interface AuthResponse {
-  user: User | null
-  error?: string
-}
 
 // Authentication functions
 export const signIn = async (): Promise<AuthResponse> => {

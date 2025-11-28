@@ -1,18 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { checkAdminStatus } from '../services/authService'
-import { supabase } from '../services/authService'
-import { User } from '@supabase/supabase-js' // Use Supabase type directly if possible, or our custom interface
-
-// Use our custom User interface matching the one in authService (re-declared here to match existing file structure if needed, or import)
-// Since authService exports a User interface, let's stick to the local definition or imports.
-// Ideally, we should just use the type from authService.
-import { User as CustomUser } from '../services/authService' 
-
-interface AuthState {
-  user: CustomUser | null
-  loading: boolean
-  isAdmin: boolean
-}
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
+import { checkAdminStatus, supabase } from '../services/authService'
+import { AuthState } from '../types'
 
 interface AuthContextType {
   authState: AuthState
@@ -41,10 +29,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin: false
   })
 
+  // Ref to track the last processed user ID to prevent redundant admin checks
+  const lastProcessedUserId = useRef<string | null>(null)
+
   useEffect(() => {
     // supabase.auth.onAuthStateChange handles the initial check and all subsequent auth events.
-    // It will fire with an 'INITIAL_SESSION' event when the component mounts.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const currentUserId = session?.user?.id || null
+
+      // Optimization: If user hasn't changed, skip re-fetching admin status.
+      // This prevents double-firing on initial load (INITIAL_SESSION + SIGNED_IN).
+      if (currentUserId === lastProcessedUserId.current) {
+        // If we are just starting up (loading=true), we might still want to ensure state is set,
+        // but usually onAuthStateChange fires reliably.
+        // If we are already loaded, we definitely skip.
+        if (!authState.loading) return
+      }
+
+      lastProcessedUserId.current = currentUserId
+
       if (session?.user) {
         try {
           // User is logged in, check admin status
@@ -84,7 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignIn = async () => {
     setAuthState(prev => ({ ...prev, loading: true }))
@@ -115,7 +118,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setAuthState(prev => ({ ...prev, loading: true }))
     try {
       await supabase.auth.signOut()
-      // onAuthStateChange will handle the state update
+      lastProcessedUserId.current = null // Reset tracker on sign out
     } catch (error) {
       console.error('Sign out error:', error)
       setAuthState(prev => ({ ...prev, loading: false }))

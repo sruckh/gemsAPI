@@ -11,3 +11,8 @@ venv
 coverage
 .pytest_cache
 .serena
+.claude
+.clavix
+.gemini
+.genkit
+.kilocode

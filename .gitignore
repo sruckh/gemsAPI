@@ -35,3 +35,8 @@ env/
 
 # Serena
 .serena/
+.claude/
+.clavix/
+.gemini/
+.genkit/
+.kilocode/

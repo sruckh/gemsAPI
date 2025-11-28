@@ -225,7 +225,7 @@ async def create_gem(gem: GemModel, client: Client = Depends(get_user_supabase_c
         gem_data = gem.model_dump(exclude_unset=True)
         # Supabase RLS will attach the user_id automatically if configured with default values or triggers,
         # but normally we rely on the auth context.
-        response = client.table("gems").insert(gem_data).execute()
+        response = client.table("gems").insert(gem_data).select("*").execute()
         if response.data:
             return response.data[0]
         raise HTTPException(status_code=500, detail="Failed to create gem")
@@ -237,7 +237,7 @@ async def create_gem(gem: GemModel, client: Client = Depends(get_user_supabase_c
 async def update_gem(gem_id: str, gem: GemModel, client: Client = Depends(get_user_supabase_client)):
     try:
         gem_data = gem.model_dump(exclude={"id", "created_at"}, exclude_unset=True)
-        response = client.table("gems").update(gem_data).eq("id", gem_id).execute()
+        response = client.table("gems").update(gem_data).eq("id", gem_id).select("*").execute()
         if response.data:
             return response.data[0]
         raise HTTPException(status_code=404, detail="Gem not found or permission denied")
