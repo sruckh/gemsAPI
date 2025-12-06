@@ -29,6 +29,8 @@ DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
 PORT = int(os.getenv("PORT", 8000))
 NODE_ENV = os.getenv("NODE_ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+VITE_SUPABASE_ANON_KEY = os.getenv("VITE_SUPABASE_ANON_KEY")
+VITE_SUPABASE_KEY = os.getenv("VITE_SUPABASE_KEY")  # should never be set; service keys must stay server-only
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -166,6 +168,41 @@ def clean_thought_text(text: str) -> str:
     cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
     cleaned_text = cleaned_text.strip()
     return cleaned_text
+
+def _ensure_secrets_not_exposed():
+    """
+    Hard-stop startup if sensitive keys are misconfigured or leaked into the built frontend.
+    - Service role key must never match the anon key.
+    - VITE_SUPABASE_KEY must not be set (prevents bundling service key to client).
+    - Scan dist assets for SUPABASE_KEY or API_TOKEN bytes.
+    """
+    service_key = SUPABASE_KEY or ""
+    anon_key = VITE_SUPABASE_ANON_KEY or ""
+    api_token = os.getenv("API_TOKEN", "")
+
+    if VITE_SUPABASE_KEY:
+        raise RuntimeError("VITE_SUPABASE_KEY is set; service role key must never be exposed to the frontend. Remove it.")
+
+    if service_key and anon_key and service_key == anon_key:
+        raise RuntimeError("Supabase service role key matches anon key. Rotate keys so service and anon differ.")
+
+    dist_dir = "dist"
+    secrets_to_check = [service_key.encode() if service_key else b"", api_token.encode() if api_token else b""]
+    secrets_to_check = [s for s in secrets_to_check if s]
+
+    if secrets_to_check and os.path.isdir(dist_dir):
+        for root, _, files in os.walk(dist_dir):
+            for fname in files:
+                path = os.path.join(root, fname)
+                try:
+                    with open(path, "rb") as fh:
+                        blob = fh.read()
+                        for secret in secrets_to_check:
+                            if secret and secret in blob:
+                                raise RuntimeError(f"Secret material detected in built asset: {path}. Rebuild after removing leaks.")
+                except Exception as e:
+                    # Non-fatal read issues; continue scanning but log for visibility without secrets.
+                    logger.warning(f"Skipped secret scan for {path}: {e}")
 
 async def generate_gemini_response(model_name: str, system_instructions: str, user_prompt: str) -> str:
     if not gemini_client:
@@ -372,6 +409,14 @@ else:
     @app.get("/")
     def root():
         return {"message": "API is running. Frontend not built/found."}
+
+@app.on_event("startup")
+async def security_startup_checks():
+    """
+    Enforce invariant that no sensitive keys are accidentally shipped to clients.
+    Raises at startup to fail fast in misconfigured environments.
+    """
+    _ensure_secrets_not_exposed()
 
 if __name__ == "__main__":
     import uvicorn

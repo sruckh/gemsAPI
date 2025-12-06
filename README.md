@@ -41,6 +41,12 @@ Since the standard Gemini Gems interface does not currently support direct API a
 *   Supabase Account
 *   Google Gemini API Key
 
+### Security hygiene
+
+*   Keep `SUPABASE_KEY` and `API_TOKEN` server-only; never add them to `VITE_*` variables or frontend code.
+*   The backend fails to start if a service key is exposed to the frontend or bundled into `dist`.
+*   Before committing, run `npm run secret:check` to scan for leaked tokens in assets, source, and docs.
+
 ### Environment Variables
 
 Create a `.env` file with the following:

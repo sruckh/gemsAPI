@@ -4,7 +4,7 @@ services:
       context: .
       args:
         VITE_SUPABASE_URL: ${SUPABASE_URL}
-        VITE_SUPABASE_ANON_KEY: ${SUPABASE_KEY}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
     container_name: gemsapi
     restart: unless-stopped
     env_file:
