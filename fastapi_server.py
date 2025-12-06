@@ -3,7 +3,7 @@ import logging
 import re
 import traceback
 import hashlib
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Callable, Awaitable
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,7 @@ from google.genai import types
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastmcp import FastMCP
 
 # Load environment variables
 load_dotenv()
@@ -340,6 +341,29 @@ def _fetch_gem_by_identifier(client: Client, identifier: str) -> Optional[dict]:
         logger.error(f"Fetch by name failed for {identifier}: {e}")
     return None
 
+def _supabase_client_for_token(token: str) -> Client:
+    """
+    Return a Supabase client based on a bearer token.
+    - If token matches API_TOKEN, return the global service-role client.
+    - Otherwise, treat token as a Supabase access token and set session.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    api_token = os.getenv("API_TOKEN")
+    if api_token and token == api_token:
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        return supabase
+
+    try:
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        client.auth.set_session(access_token=token, refresh_token=token)
+        return client
+    except Exception as e:
+        logger.error(f"Authentication error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
 # --- REST prompt-package endpoint ---
 @app.get("/api/gems/{identifier}/package", response_model=GemPackage)
 @limiter.limit("10/minute")
@@ -411,42 +435,26 @@ if ENABLE_MCP:
         """Auth check for MCP clients; returns ok if bearer is valid."""
         return {"status": "ok", "user": user_email}
 
-    @app.get("/.well-known/mcp.json", response_model=MCPManifest)
-    async def mcp_manifest(request: Request):
-        base = str(request.base_url).rstrip("/")
-        return MCPManifest(
-            name="gemsapi-mcp",
-            version="0.1.0",
-            description="MCP interface for Gems stored in Supabase",
-            server_url=base,
-            resources=["gems:list", "gems:get"],
-            tools=[],
-            auth={
-                "type": "bearer",
-                "header": "Authorization",
-                "format": "Bearer <token>",
-                "arg_name": "auth_token"
-            }
-        )
+    # FastMCP server (read-only tools first)
+    mcp_server = FastMCP(
+        name="gemsapi-mcp",
+        version="0.2.0",
+        description="MCP interface for Gems stored in Supabase",
+    )
 
-    @app.get("/api/mcp/gems")
-    @limiter.limit("10/minute")
-    async def mcp_list_gems(client: Client = Depends(get_user_supabase_client)):
-        try:
-            response = client.table("gems").select("id,name,description,updated_at").order("updated_at", desc=True).execute()
-            data = response.data or []
-            # attach checksum for cache validation (without instructions)
-            for row in data:
-                row["checksum"] = compute_checksum(row.get("id", "") + row.get("name", ""))
-                row["schema_version"] = 1
-            return {"gems": data}
-        except Exception as e:
-            logger.error(f"MCP list error: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+    @mcp_server.tool("gems.list")
+    async def mcp_list(auth_token: str) -> dict:
+        client = _supabase_client_for_token(auth_token)
+        response = client.table("gems").select("id,name,description,updated_at").order("updated_at", desc=True).execute()
+        data = response.data or []
+        for row in data:
+            row["checksum"] = compute_checksum(row.get("id", "") + row.get("name", ""))
+            row["schema_version"] = 1
+        return {"gems": data}
 
-    @app.get("/api/mcp/gems/{identifier}")
-    @limiter.limit("10/minute")
-    async def mcp_get_gem(identifier: str, client: Client = Depends(get_user_supabase_client)):
+    @mcp_server.tool("gems.get")
+    async def mcp_get(identifier: str, auth_token: str) -> dict:
+        client = _supabase_client_for_token(auth_token)
         gem = _fetch_gem_by_identifier(client, identifier)
         if not gem:
             raise HTTPException(status_code=404, detail="Gem not found")
@@ -459,6 +467,28 @@ if ENABLE_MCP:
             "checksum": compute_checksum(gem.get("instructions", "")),
             "updated_at": gem.get("updated_at"),
         }
+
+    # Expose MCP manifest and mount FastMCP ASGI app under /mcp
+    @app.get("/.well-known/mcp.json", response_model=MCPManifest)
+    async def mcp_manifest(request: Request):
+        base = str(request.base_url).rstrip("/")
+        return MCPManifest(
+            name="gemsapi-mcp",
+            version="0.2.0",
+            description="MCP interface for Gems stored in Supabase",
+            server_url=f"{base}/mcp",
+            resources=["gems.list", "gems.get"],
+            tools=["gems.list", "gems.get"],
+            auth={
+                "type": "bearer",
+                "header": "Authorization",
+                "format": "Bearer <token>",
+                "arg_name": "auth_token"
+            }
+        )
+
+    # Mount FastMCP HTTP app
+    app.mount("/mcp", mcp_server.http_app())
 
 # --- Authentication Endpoints ---
 @app.post("/api/auth/check-admin")
