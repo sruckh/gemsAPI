@@ -367,7 +367,7 @@ def _supabase_client_for_token(token: str) -> Client:
 # --- REST prompt-package endpoint ---
 @app.get("/api/gems/{identifier}/package", response_model=GemPackage)
 @limiter.limit("10/minute")
-async def get_gem_package(identifier: str, client: Client = Depends(get_user_supabase_client)):
+async def get_gem_package(identifier: str, request: Request, client: Client = Depends(get_user_supabase_client)):
     gem = _fetch_gem_by_identifier(client, identifier)
     if not gem:
         raise HTTPException(status_code=404, detail="Gem not found")
