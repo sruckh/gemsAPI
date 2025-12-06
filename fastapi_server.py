@@ -2,7 +2,8 @@ import os
 import logging
 import re
 import traceback
-from typing import Optional, List
+import hashlib
+from typing import Optional, List, Union
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +32,7 @@ NODE_ENV = os.getenv("NODE_ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 VITE_SUPABASE_ANON_KEY = os.getenv("VITE_SUPABASE_ANON_KEY")
 VITE_SUPABASE_KEY = os.getenv("VITE_SUPABASE_KEY")  # should never be set; service keys must stay server-only
+ENABLE_MCP = os.getenv("ENABLE_MCP", "false").lower() == "true"
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -76,6 +78,7 @@ class GemModel(BaseModel):
     description: Optional[str] = None
     instructions: str
     created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 class GenerateRequest(BaseModel):
     model_name: Optional[str] = DEFAULT_GEMINI_MODEL
@@ -92,6 +95,24 @@ class AuthCheckRequest(BaseModel):
 
 class RegisterAdminRequest(BaseModel):
     email: str
+
+class GemPackage(BaseModel):
+    schema_version: int = 1
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    instructions: str
+    checksum: str
+    updated_at: Optional[str] = None
+
+class MCPManifest(BaseModel):
+    name: str
+    version: str
+    description: str
+    server_url: str
+    resources: List[str]
+    tools: List[str]
+    auth: dict
 
 # --- Middleware ---
 allowed_origins = []
@@ -168,6 +189,10 @@ def clean_thought_text(text: str) -> str:
     cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
     cleaned_text = cleaned_text.strip()
     return cleaned_text
+
+def compute_checksum(text: str) -> str:
+    """Return a stable SHA-256 checksum for caching/validation."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 def _ensure_secrets_not_exposed():
     """
@@ -297,6 +322,43 @@ async def delete_gem(gem_id: str, client: Client = Depends(get_user_supabase_cli
         logger.error(f"Error deleting gem: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# --- Helper for fetching gem by id or name ---
+def _fetch_gem_by_identifier(client: Client, identifier: str) -> Optional[dict]:
+    """Try to fetch gem by UUID id first; if not UUID or not found, fetch by name."""
+    try:
+        # attempt id
+        response = client.table("gems").select("*").eq("id", identifier).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        logger.debug(f"Fetch by id failed for {identifier}: {e}")
+    try:
+        response = client.table("gems").select("*").eq("name", identifier).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        logger.error(f"Fetch by name failed for {identifier}: {e}")
+    return None
+
+# --- REST prompt-package endpoint ---
+@app.get("/api/gems/{identifier}/package", response_model=GemPackage)
+@limiter.limit("10/minute")
+async def get_gem_package(identifier: str, client: Client = Depends(get_user_supabase_client)):
+    gem = _fetch_gem_by_identifier(client, identifier)
+    if not gem:
+        raise HTTPException(status_code=404, detail="Gem not found")
+
+    checksum = compute_checksum(gem.get("instructions", ""))
+    pkg = GemPackage(
+        id=gem.get("id"),
+        name=gem.get("name"),
+        description=gem.get("description"),
+        instructions=gem.get("instructions", ""),
+        checksum=checksum,
+        updated_at=gem.get("updated_at"),
+    )
+    return pkg
+
 # Raw Generation Endpoint (Free-form) - Protected?
 # The user can likely only use this if authenticated, to prevent abuse.
 # But for now, I'll leave it public but rate limited, as it's not accessing DB.
@@ -339,6 +401,64 @@ async def execute_gem_by_name(
     )
     
     return {"text": text}
+
+# --- MCP / LLM-friendly endpoints (read-only first phase) ---
+if ENABLE_MCP:
+
+    @app.get("/api/mcp/ping")
+    @limiter.limit("10/minute")
+    async def mcp_ping(user_email: str = Depends(get_current_user_email)):
+        """Auth check for MCP clients; returns ok if bearer is valid."""
+        return {"status": "ok", "user": user_email}
+
+    @app.get("/.well-known/mcp.json", response_model=MCPManifest)
+    async def mcp_manifest(request: Request):
+        base = str(request.base_url).rstrip("/")
+        return MCPManifest(
+            name="gemsapi-mcp",
+            version="0.1.0",
+            description="MCP interface for Gems stored in Supabase",
+            server_url=base,
+            resources=["gems:list", "gems:get"],
+            tools=[],
+            auth={
+                "type": "bearer",
+                "header": "Authorization",
+                "format": "Bearer <token>",
+                "arg_name": "auth_token"
+            }
+        )
+
+    @app.get("/api/mcp/gems")
+    @limiter.limit("10/minute")
+    async def mcp_list_gems(client: Client = Depends(get_user_supabase_client)):
+        try:
+            response = client.table("gems").select("id,name,description,updated_at").order("updated_at", desc=True).execute()
+            data = response.data or []
+            # attach checksum for cache validation (without instructions)
+            for row in data:
+                row["checksum"] = compute_checksum(row.get("id", "") + row.get("name", ""))
+                row["schema_version"] = 1
+            return {"gems": data}
+        except Exception as e:
+            logger.error(f"MCP list error: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+    @app.get("/api/mcp/gems/{identifier}")
+    @limiter.limit("10/minute")
+    async def mcp_get_gem(identifier: str, client: Client = Depends(get_user_supabase_client)):
+        gem = _fetch_gem_by_identifier(client, identifier)
+        if not gem:
+            raise HTTPException(status_code=404, detail="Gem not found")
+        return {
+            "schema_version": 1,
+            "id": gem.get("id"),
+            "name": gem.get("name"),
+            "description": gem.get("description"),
+            "instructions": gem.get("instructions", ""),
+            "checksum": compute_checksum(gem.get("instructions", "")),
+            "updated_at": gem.get("updated_at"),
+        }
 
 # --- Authentication Endpoints ---
 @app.post("/api/auth/check-admin")
