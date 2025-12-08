@@ -2,7 +2,9 @@ import os
 import logging
 import re
 import traceback
-from typing import Optional, List
+import hashlib
+from typing import Optional, List, Union, Callable, Awaitable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +19,7 @@ from google.genai import types
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastmcp import FastMCP
 
 # Load environment variables
 load_dotenv()
@@ -31,13 +34,39 @@ NODE_ENV = os.getenv("NODE_ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 VITE_SUPABASE_ANON_KEY = os.getenv("VITE_SUPABASE_ANON_KEY")
 VITE_SUPABASE_KEY = os.getenv("VITE_SUPABASE_KEY")  # should never be set; service keys must stay server-only
+ENABLE_MCP = os.getenv("ENABLE_MCP", "false").lower() == "true"
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- MCP Server Setup (must be before FastAPI app for lifespan integration) ---
+mcp_server = None
+mcp_app = None
+
+if ENABLE_MCP:
+    mcp_server = FastMCP(
+        name="gemsapi-mcp",
+        version="0.2.0",
+    )
+    # For FastMCP v2.3.2, we need to create the SSE app differently
+    # The SSE app should be created with proper path mounting
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _ensure_secrets_not_exposed()
+    if mcp_app is not None:
+        # Combine app lifespan with MCP lifespan for proper session manager init
+        async with mcp_app.lifespan(app):
+            yield
+    else:
+        yield
+
 # Initialize FastAPI
-app = FastAPI(docs_url=None if NODE_ENV == "production" else "/docs")
+app = FastAPI(
+    docs_url=None if NODE_ENV == "production" else "/docs",
+    lifespan=lifespan
+)
 
 # Rate Limiter Setup
 limiter = Limiter(key_func=get_remote_address)
@@ -76,6 +105,7 @@ class GemModel(BaseModel):
     description: Optional[str] = None
     instructions: str
     created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 class GenerateRequest(BaseModel):
     model_name: Optional[str] = DEFAULT_GEMINI_MODEL
@@ -92,6 +122,26 @@ class AuthCheckRequest(BaseModel):
 
 class RegisterAdminRequest(BaseModel):
     email: str
+
+class GemPackage(BaseModel):
+    schema_version: int = 1
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    instructions: str
+    checksum: str
+    updated_at: Optional[str] = None
+
+class MCPManifest(BaseModel):
+    name: str
+    version: str
+    description: str
+    server_url: str
+    resources: List[str]
+    tools: List[str]
+    auth: dict
+    transports: Optional[dict] = None
+    claude_desktop: Optional[dict] = None
 
 # --- Middleware ---
 allowed_origins = []
@@ -168,6 +218,10 @@ def clean_thought_text(text: str) -> str:
     cleaned_text = re.sub(r'<Sig_[A-Z]>', '', cleaned_text)
     cleaned_text = cleaned_text.strip()
     return cleaned_text
+
+def compute_checksum(text: str) -> str:
+    """Return a stable SHA-256 checksum for caching/validation."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 def _ensure_secrets_not_exposed():
     """
@@ -297,6 +351,66 @@ async def delete_gem(gem_id: str, client: Client = Depends(get_user_supabase_cli
         logger.error(f"Error deleting gem: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# --- Helper for fetching gem by id or name ---
+def _fetch_gem_by_identifier(client: Client, identifier: str) -> Optional[dict]:
+    """Try to fetch gem by UUID id first; if not UUID or not found, fetch by name."""
+    try:
+        # attempt id
+        response = client.table("gems").select("*").eq("id", identifier).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        logger.debug(f"Fetch by id failed for {identifier}: {e}")
+    try:
+        response = client.table("gems").select("*").eq("name", identifier).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        logger.error(f"Fetch by name failed for {identifier}: {e}")
+    return None
+
+def _supabase_client_for_token(token: str) -> Client:
+    """
+    Return a Supabase client based on a bearer token.
+    - If token matches API_TOKEN, return the global service-role client.
+    - Otherwise, treat token as a Supabase access token and set session.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    api_token = os.getenv("API_TOKEN")
+    if api_token and token == api_token:
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        return supabase
+
+    try:
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        client.auth.set_session(access_token=token, refresh_token=token)
+        return client
+    except Exception as e:
+        logger.error(f"Authentication error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+# --- REST prompt-package endpoint ---
+@app.get("/api/gems/{identifier}/package", response_model=GemPackage)
+@limiter.limit("10/minute")
+async def get_gem_package(identifier: str, request: Request, client: Client = Depends(get_user_supabase_client)):
+    gem = _fetch_gem_by_identifier(client, identifier)
+    if not gem:
+        raise HTTPException(status_code=404, detail="Gem not found")
+
+    checksum = compute_checksum(gem.get("instructions", ""))
+    pkg = GemPackage(
+        id=gem.get("id"),
+        name=gem.get("name"),
+        description=gem.get("description"),
+        instructions=gem.get("instructions", ""),
+        checksum=checksum,
+        updated_at=gem.get("updated_at"),
+    )
+    return pkg
+
 # Raw Generation Endpoint (Free-form) - Protected?
 # The user can likely only use this if authenticated, to prevent abuse.
 # But for now, I'll leave it public but rate limited, as it's not accessing DB.
@@ -339,6 +453,259 @@ async def execute_gem_by_name(
     )
     
     return {"text": text}
+
+# --- MCP / LLM-friendly endpoints (read-only first phase) ---
+if ENABLE_MCP and mcp_server is not None:
+
+    @app.get("/api/mcp/ping")
+    @limiter.limit("10/minute")
+    async def mcp_ping(request: Request, user_email: str = Depends(get_current_user_email)):
+        """Auth check for MCP clients; returns ok if bearer is valid."""
+        return {"status": "ok", "user": user_email}
+
+    # Register MCP tools (mcp_server already created at top for lifespan integration)
+    @mcp_server.tool("gems.list")
+    async def mcp_list() -> dict:
+        """List all gems for the authenticated user."""
+        # For MCP integration, we use API_TOKEN as the auth mechanism
+        # MCP doesn't properly expose request headers in FastMCP v2.3.2
+        auth_token = API_TOKEN  # Use the global API_TOKEN
+        if not auth_token:
+            raise ValueError("API_TOKEN not configured for MCP access")
+
+        client = _supabase_client_for_token(auth_token)
+
+        response = client.table("gems").select("id,name,description,created_at").order("created_at", desc=True).execute()
+        data = response.data or []
+        for row in data:
+            row["checksum"] = compute_checksum(row.get("id", "") + row.get("name", ""))
+            row["schema_version"] = 1
+        return {"gems": data}
+
+    @mcp_server.tool("gems.get")
+    async def mcp_get(identifier: str) -> dict:
+        """Get a specific gem by ID or name."""
+        # Use API_TOKEN for authentication in MCP context
+        auth_token = API_TOKEN
+        if not auth_token:
+            raise ValueError("API_TOKEN not configured for MCP access")
+
+        client = _supabase_client_for_token(auth_token)
+
+        gem = _fetch_gem_by_identifier(client, identifier)
+        if not gem:
+            raise HTTPException(status_code=404, detail="Gem not found")
+        return {
+            "schema_version": 1,
+            "id": gem.get("id"),
+            "name": gem.get("name"),
+            "description": gem.get("description"),
+            "instructions": gem.get("instructions", ""),
+            "checksum": compute_checksum(gem.get("instructions", "")),
+            "updated_at": gem.get("created_at"),
+        }
+
+    # Expose MCP manifest
+    @app.get("/.well-known/mcp.json", response_model=MCPManifest)
+    async def mcp_manifest(request: Request):
+        base = str(request.base_url).rstrip("/")
+        return MCPManifest(
+            name="gemsapi-mcp",
+            version="0.2.0",
+            description="MCP interface for Gems stored in Supabase",
+            server_url=f"{base}/mcp",
+            resources=["gems://list", "gems://{identifier}"],
+            tools=["gems.list", "gems.get", "gems.search"],
+            auth={
+                "type": "bearer",
+                "header": "Authorization",
+                "format": "Bearer <token>"
+            },
+            transports={
+                "sse": {
+                    "url": f"{base}/mcp",
+                    "description": "Server-Sent Events transport for HTTP clients (Cursor, web)"
+                },
+                "stdio": {
+                    "script_url": f"{base}/api/mcp/stdio-script",
+                    "description": "Download STDIO script for Claude Desktop"
+                }
+            },
+            claude_desktop={
+                "setup_guide": f"{base}/api/mcp/claude-desktop-config",
+                "requirements": ["python>=3.10", "fastmcp", "httpx"],
+                "note": "Claude Desktop requires local STDIO transport. Download the script and configure as shown."
+            }
+        )
+
+    # Serve the STDIO MCP script for Claude Desktop users
+    @app.get("/api/mcp/stdio-script")
+    async def get_mcp_stdio_script(request: Request):
+        """Download the MCP STDIO server script for Claude Desktop integration."""
+        from fastapi.responses import Response
+        
+        base = str(request.base_url).rstrip("/")
+        
+        script = f'''#!/usr/bin/env python3
+"""
+GemsAPI MCP Server - STDIO Transport for Claude Desktop
+
+Setup:
+    1. Install dependencies: pip install fastmcp httpx
+    2. Set environment variable: export GEMSAPI_TOKEN="your_token_here"
+    3. Run: python gemsapi_mcp.py
+
+Or configure in Claude Desktop's claude_desktop_config.json
+"""
+
+import os
+import sys
+import httpx
+from typing import Optional
+from fastmcp import FastMCP
+
+# Configuration
+GEMSAPI_URL = os.getenv("GEMSAPI_URL", "{base}")
+GEMSAPI_TOKEN = os.getenv("GEMSAPI_TOKEN")
+
+# Create MCP server
+mcp = FastMCP(name="gemsapi", version="0.2.0")
+
+# Lazy HTTP client
+_http_client: Optional[httpx.Client] = None
+
+def get_client() -> httpx.Client:
+    global _http_client
+    if _http_client is None:
+        if not GEMSAPI_TOKEN:
+            raise ValueError("GEMSAPI_TOKEN not set")
+        _http_client = httpx.Client(
+            base_url=GEMSAPI_URL,
+            headers={{"Authorization": f"Bearer {{GEMSAPI_TOKEN}}", "Content-Type": "application/json"}},
+            timeout=30.0,
+        )
+    return _http_client
+
+
+@mcp.tool
+def list_gems() -> dict:
+    """List all gems for the authenticated user."""
+    try:
+        response = get_client().get("/api/gems")
+        response.raise_for_status()
+        data = response.json()
+        gems = data if isinstance(data, list) else data.get("gems", data)
+        return {{"gems": [{{"id": g.get("id"), "name": g.get("name"), "description": g.get("description")}} for g in gems]}}
+    except Exception as e:
+        return {{"error": str(e)}}
+
+
+@mcp.tool
+def get_gem(identifier: str) -> dict:
+    """Get a specific gem by ID or name."""
+    try:
+        response = get_client().get(f"/api/gems/{{identifier}}/package")
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return {{"error": "Gem not found", "identifier": identifier}}
+        return {{"error": f"API error: {{e.response.status_code}}"}}
+    except Exception as e:
+        return {{"error": str(e)}}
+
+
+@mcp.tool
+def search_gems(query: str) -> dict:
+    """Search for gems by name or description."""
+    try:
+        response = get_client().get("/api/gems")
+        response.raise_for_status()
+        data = response.json()
+        gems = data if isinstance(data, list) else data.get("gems", data)
+        q = query.lower()
+        matching = [
+            {{"id": g.get("id"), "name": g.get("name"), "description": g.get("description")}}
+            for g in gems
+            if q in g.get("name", "").lower() or q in (g.get("description") or "").lower()
+        ]
+        return {{"gems": matching, "query": query, "count": len(matching)}}
+    except Exception as e:
+        return {{"error": str(e)}}
+
+
+if __name__ == "__main__":
+    if not GEMSAPI_TOKEN:
+        print("Error: GEMSAPI_TOKEN environment variable required", file=sys.stderr)
+        sys.exit(1)
+    mcp.run()
+'''
+        return Response(
+            content=script,
+            media_type="text/x-python",
+            headers={
+                "Content-Disposition": "attachment; filename=gemsapi_mcp.py",
+                "Cache-Control": "no-cache"
+            }
+        )
+
+    # Provide Claude Desktop configuration example
+    @app.get("/api/mcp/claude-desktop-config")
+    async def get_claude_desktop_config(request: Request):
+        """Get the Claude Desktop configuration for GemsAPI MCP integration."""
+        base = str(request.base_url).rstrip("/")
+        
+        return {
+            "instructions": [
+                "1. Download the MCP script from: " + f"{base}/api/mcp/stdio-script",
+                "2. Save it as 'gemsapi_mcp.py' in a permanent location",
+                "3. Install dependencies: pip install fastmcp httpx",
+                "4. Edit your Claude Desktop config file:",
+                "   - macOS: ~/Library/Application Support/Claude/claude_desktop_config.json",
+                "   - Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
+                "5. Add the configuration below and restart Claude Desktop",
+            ],
+            "config_example": {
+                "mcpServers": {
+                    "gemsapi": {
+                        "command": "python",
+                        "args": ["/path/to/gemsapi_mcp.py"],
+                        "env": {
+                            "GEMSAPI_TOKEN": "YOUR_SUPABASE_ACCESS_TOKEN",
+                            "GEMSAPI_URL": base
+                        }
+                    }
+                }
+            },
+            "alternative_with_uv": {
+                "mcpServers": {
+                    "gemsapi": {
+                        "command": "uv",
+                        "args": [
+                            "run",
+                            "--with", "fastmcp",
+                            "--with", "httpx",
+                            "python",
+                            "/path/to/gemsapi_mcp.py"
+                        ],
+                        "env": {
+                            "GEMSAPI_TOKEN": "YOUR_SUPABASE_ACCESS_TOKEN",
+                            "GEMSAPI_URL": base
+                        }
+                    }
+                }
+            },
+            "notes": [
+                "Replace /path/to/gemsapi_mcp.py with the actual path where you saved the script",
+                "Replace YOUR_SUPABASE_ACCESS_TOKEN with your actual Supabase access token",
+                "The 'uv' alternative auto-installs dependencies but requires uv to be installed"
+            ]
+        }
+
+    # Mount FastMCP server with SSE transport
+    # Create the ASGI app with SSE transport for backward compatibility
+    mcp_app = mcp_server.http_app(path="/", transport="sse")
+    app.mount("/mcp", mcp_app, name="mcp")
 
 # --- Authentication Endpoints ---
 @app.post("/api/auth/check-admin")
@@ -409,14 +776,6 @@ else:
     @app.get("/")
     def root():
         return {"message": "API is running. Frontend not built/found."}
-
-@app.on_event("startup")
-async def security_startup_checks():
-    """
-    Enforce invariant that no sensitive keys are accidentally shipped to clients.
-    Raises at startup to fail fast in misconfigured environments.
-    """
-    _ensure_secrets_not_exposed()
 
 if __name__ == "__main__":
     import uvicorn

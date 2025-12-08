@@ -47,6 +47,30 @@ These utilities provide structured workflows for common tasks. Invoke them using
 - **Improve mode** (`/clavix:improve`): Smart prompt optimization with auto-depth selection
 - **PRD mode** (`/clavix:prd`): Strategic planning with architecture and business impact
 
+# 🛑 STOP — Run codemap before ANY task
+
+```bash
+codemap .                     # Project structure
+codemap --deps                # How files connect
+codemap --diff                # What changed vs main
+codemap --diff --ref <branch> # Changes vs specific branch
+```
+
+## Required Usage
+
+**BEFORE starting any task**, run `codemap .` first.
+
+**ALWAYS run `codemap --deps` when:**
+- User asks how something works
+- Refactoring or moving code
+- Tracing imports or dependencies
+
+**ALWAYS run `codemap --diff` when:**
+- Reviewing or summarizing changes
+- Before committing code
+- User asks what changed
+- Use `--ref <branch>` when comparing against something other than main
+
 **Recommended Workflow:**
 1. Start with `/clavix:prd` or `/clavix:start` for complex features
 2. Refine requirements with `/clavix:refine` as needed
