@@ -1,0 +1,182 @@
+<mxfile host="app.diagrams.net" modified="2025-01-13T00:00:00.000Z" agent="Claude" version="1.0">
+  <diagram name="Architecture" id="arch-001">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="gemsAPI System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="400" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Client/User Layer -->
+        <mxCell id="user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="40" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Frontend Container -->
+        <mxCell id="frontend_boundary" value="Frontend (React 19 + Vite)" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="120" width="280" height="440" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gem_manager" value="GemManager&lt;br&gt;Component" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="20" y="50" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gem_chat" value="GemChat&lt;br&gt;Component" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="140" y="50" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_context" value="AuthContext&lt;br&gt;Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="20" y="140" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="db_service" value="dbService.ts&lt;br&gt;(API Layer)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="20" y="240" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_service" value="authService.ts&lt;br&gt;(Supabase Auth)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="140" y="140" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gemini_service" value="geminiService.ts&lt;br&gt;(Direct API)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="140" y="240" width="100" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="local_storage" value="LocalStorage&lt;br&gt;(Demo Mode)" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="frontend_boundary">
+          <mxGeometry x="80" y="340" width="80" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend Container -->
+        <mxCell id="backend_boundary" value="Backend (FastAPI)" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="520" y="120" width="280" height="440" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi" value="FastAPI Server&lt;br&gt;(Python)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=12;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="20" y="50" width="240" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rate_limiter" value="Rate Limiter&lt;br&gt;(SlowAPI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="20" y="120" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="cors" value="CORS&lt;br&gt;Middleware" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="150" y="120" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_gems" value="/api/gems&lt;br&gt;(CRUD)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="20" y="200" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_execute" value="/api/gems/execute&lt;br&gt;(Run Gem)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="150" y="200" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_gemini" value="/api/gemini/generate&lt;br&gt;(Free-form)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="20" y="270" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_auth" value="/api/auth/*&lt;br&gt;(Admin)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="150" y="270" width="110" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mcp_server" value="MCP Server&lt;br&gt;(FastMCP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="20" y="350" width="110" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mcp_tools" value="MCP Tools&lt;br&gt;gems.list/get/search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;fontStyle=1;" vertex="1" parent="backend_boundary">
+          <mxGeometry x="150" y="350" width="110" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- External Services Container -->
+        <mxCell id="external_boundary" value="External Services" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;rounded=1;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="860" y="120" width="280" height="440" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="supabase" value="Supabase&lt;br&gt;(PostgreSQL)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="external_boundary">
+          <mxGeometry x="40" y="60" width="100" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gemini" value="Google Gemini API&lt;br&gt;(1.5, 2.0, 3.0)" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1;" vertex="1" parent="external_boundary">
+          <mxGeometry x="160" y="60" width="100" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gems_table" value="gems table&lt;br&gt;(RLS Protected)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="external_boundary">
+          <mxGeometry x="20" y="200" width="90" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="admin_table" value="admin_users&lt;br&gt;table" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="external_boundary">
+          <mxGeometry x="130" y="200" width="90" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="claude_desktop" value="Claude Desktop&lt;br&gt;(MCP Client)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" vertex="1" parent="external_boundary">
+          <mxGeometry x="50" y="320" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="cursor" value="Cursor / IDE&lt;br&gt;(MCP SSE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" vertex="1" parent="external_boundary">
+          <mxGeometry x="50" y="390" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Connections: User to Frontend -->
+        <mxCell id="c1" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" parent="1" source="user" target="frontend_boundary">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connections: Frontend to Backend -->
+        <mxCell id="c2" value="HTTPS / REST API" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="frontend_boundary" target="backend_boundary">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connections: Backend to Supabase -->
+        <mxCell id="c3" value="Supabase SDK" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="backend_boundary" target="supabase">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connections: Backend to Gemini -->
+        <mxCell id="c4" value="genai SDK" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="api_gemini" target="gemini">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connections: MCP to Clients -->
+        <mxCell id="c5" value="STDIO" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="mcp_server" target="claude_desktop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c6" value="SSE" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="mcp_server" target="cursor">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend_boundary" value="Legend" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="180" y="600" width="620" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_component" value="Component" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="20" y="50" width="80" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_service" value="Service/Database" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="120" y="50" width="60" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_external" value="External Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="200" y="50" width="80" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_middleware" value="Middleware" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="300" y="50" width="80" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_boundary_item" value="System Boundary" style="swimlane;whiteSpace=wrap;html=1;startSize=20;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="400" y="50" width="80" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_auth" value="Authentication Flow: OAuth → JWT Token → RLS" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="20" y="100" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

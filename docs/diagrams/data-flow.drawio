@@ -1,0 +1,285 @@
+<mxfile host="app.diagrams.net" modified="2025-01-13T00:00:00.000Z" agent="Claude" version="1.0">
+  <diagram name="Data Flow" id="flow-001">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="Gem Execution Data Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="400" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 1: Create/Manage Gem -->
+        <mxCell id="flow1_title" value="1. Create/Manage Gem Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="130" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_react" value="React UI&lt;br&gt;(GemManager)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="140" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_auth" value="Supabase&lt;br&gt;Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="140" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_api" value="FastAPI&lt;br&gt;/api/gems" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=11;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="450" y="140" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_rls" value="RLS Check&lt;br&gt;(user_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="140" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1_db" value="Supabase&lt;br&gt;gems table" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="730" y="130" width="80" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 1 arrows -->
+        <mxCell id="f1a1" value="Create/Edit" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="f1_user" target="f1_react">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1a2" value="OAuth + JWT" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f1_react" target="f1_auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1a3" value="POST / PUT / DELETE" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f1_auth" target="f1_api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1a4" value="Verify Access" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f1_api" target="f1_rls">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1a5" value="Store/Update" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="f1_rls" target="f1_db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 2: Execute Gem -->
+        <mxCell id="flow2_title" value="2. Execute Gem Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_react" value="React UI&lt;br&gt;(GemChat)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="310" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_api" value="FastAPI&lt;br&gt;/api/gems/execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=11;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="300" y="310" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_limit" value="Rate Limit&lt;br&gt;Check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="310" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_fetch" value="Fetch Gem&lt;br&gt;from DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="310" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_gemini" value="Google Gemini&lt;br&gt;API" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="300" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_clean" value="Clean&lt;br&gt;Thinking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="310" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2_response" value="Response&lt;br&gt;to User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="310" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 2 arrows -->
+        <mxCell id="f2a1" value="Gem + Prompt" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_user" target="f2_react">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a2" value="POST" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_react" target="f2_api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a3" value="5/min" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_api" target="f2_limit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a4" value="Get Instructions" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_limit" target="f2_fetch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a5" value="System Instructions&lt;br/>+ User Prompt" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="f2_fetch" target="f2_gemini">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a6" value="Raw Response" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_gemini" target="f2_clean">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f2a7" value="Remove &lt;thought&gt;" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f2_clean" target="f2_response">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 3: MCP Integration -->
+        <mxCell id="flow3_title" value="3. MCP Integration Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_client" value="MCP Client&lt;br&gt;(Claude/Cursor)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="480" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_transport" value="Transport&lt;br&gt;(STDIO/SSE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="480" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_mcp" value="FastMCP&lt;br&gt;Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="480" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_tools" value="MCP Tools&lt;br&gt;gems.list/get" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="480" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_auth" value="API Token&lt;br&gt;Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="670" y="480" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_api" value="FastAPI&lt;br&gt;Endpoints" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=11;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="790" y="480" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3_db" value="Supabase&lt;br&gt;Database" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="940" y="470" width="80" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 3 arrows -->
+        <mxCell id="f3a1" value="Call Tool" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f3_client" target="f3_transport">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3a2" value="JSON-RPC" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f3_transport" target="f3_mcp">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3a3" value="Register" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f3_mcp" target="f3_tools">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3a4" value="Bearer Token" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f3_tools" target="f3_auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3a5" value="HTTP Request" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f3_auth" target="f3_api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f3a6" value="Query Gems" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="f3_api" target="f3_db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Authentication Flow -->
+        <mxCell id="flow4_title" value="4. Authentication Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="610" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="660" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_google" value="Google OAuth" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="650" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_supabase_auth" value="Supabase Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="660" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_jwt" value="JWT Token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="660" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_client" value="React Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="660" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_api_auth" value="API Request&lt;br&gt;+ Bearer Token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=10;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="730" y="660" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4_rls" value="Row Level&lt;br&gt;Security" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="880" y="660" width="80" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Flow 4 arrows -->
+        <mxCell id="f4a1" value="Sign In" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_user" target="f4_google">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4a2" value="Redirect" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_google" target="f4_supabase_auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4a3" value="Issue Token" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_supabase_auth" target="f4_jwt">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4a4" value="Store Session" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_jwt" target="f4_client">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4a5" value="Send in Header" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_client" target="f4_api_auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f4a6" value="Enforce Policy" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="f4_api_auth" target="f4_rls">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend_boundary" value="Legend" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="780" width="1120" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_user" value="User/Actor" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="20" y="50" width="20" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_ui" value="UI Component" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="70" y="60" width="70" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_backend" value="Backend API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#4d7c3f;fontSize=10;fontColor=#ffffff;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="160" y="60" width="70" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_db" value="Database" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="250" y="55" width="50" height="35" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_external" value="External API" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="320" y="55" width="60" height="35" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_mcp" value="MCP Component" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="400" y="60" width="80" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_security" value="Security/Rate Limit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="500" y="60" width="100" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_flow" value="Arrow direction = Data flow | Label = Protocol/Action" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="legend_boundary">
+          <mxGeometry x="630" y="60" width="450" height="25" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

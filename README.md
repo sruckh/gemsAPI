@@ -22,6 +22,8 @@ Since the standard Gemini Gems interface does not currently support direct API a
 
 ## 🏗️ Architecture
 
+### System Architecture
+
 ![Architecture Diagram](./docs/diagrams/architecture.svg)
 
 gemsAPI is a full-stack application with a React frontend, FastAPI backend, Supabase database, and Google Gemini AI integration. The system supports multiple transport mechanisms including REST API, MCP SSE transport, and MCP STDIO for Claude Desktop.
@@ -32,6 +34,30 @@ gemsAPI is a full-stack application with a React frontend, FastAPI backend, Supa
 - **Database**: Supabase (PostgreSQL) with Row Level Security
 - **AI Integration**: Google Gemini API with thinking artifact cleanup
 - **MCP Server**: FastMCP integration for tool-based access
+
+### Data Flows
+
+![Data Flow Diagram](./docs/diagrams/data-flow.svg)
+
+**Key Workflows:**
+1. **Create/Manage Gem**: User → React UI → OAuth → FastAPI → RLS Check → Supabase
+2. **Execute Gem**: User → GemChat → Rate Limit → Fetch Gem → Gemini API → Clean Thinking → Response
+3. **MCP Integration**: MCP Client → Transport (STDIO/SSE) → FastMCP → API Auth → Database
+4. **Authentication**: Google OAuth → JWT Token → Client → Bearer Token → RLS Enforcement
+
+### Database Schema
+
+![ER Diagram](./docs/diagrams/er-diagram.svg)
+
+**Tables:**
+- `auth.users` - Supabase built-in user authentication
+- `public.gems` - Gem definitions with user ownership and RLS
+- `public.admin_users` - Administrator accounts for full access
+
+**Row Level Security (RLS):**
+- Users can only manage their own gems
+- Admin users can manage ALL gems
+- Service role bypasses RLS for backend operations
 
 ## 🚀 Quick Start
 
@@ -165,34 +191,12 @@ uvicorn fastapi_server:app --reload --host 0.0.0.0 --port 8000
 
 ### Database Schema
 
-**gems table:**
-```sql
-CREATE TABLE gems (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  instructions TEXT NOT NULL,
-  user_id UUID DEFAULT auth.uid(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+For the complete database schema with all tables, relationships, and RLS policies, see the [ER Diagram](./docs/diagrams/er-diagram.svg) above.
 
--- Enable Row Level Security
-ALTER TABLE gems ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Users can view own gems" ON gems
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own gems" ON gems
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own gems" ON gems
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own gems" ON gems
-  FOR DELETE USING (auth.uid() = user_id);
-```
+**Quick Reference:**
+- Full SQL schema available in [`docs/supabase/gems_table.sql`](./docs/supabase/gems_table.sql)
+- RLS ensures users can only access their own gems (except admins)
+- Admin users table for elevated permissions
 
 ### MCP Integration
 

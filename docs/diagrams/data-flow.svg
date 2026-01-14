@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="100%" height="100%">
+  <defs>
+    <style>
+      .title { font-family: Arial, sans-serif; font-size: 20px; font-weight: bold; fill: #333; }
+      .flow-title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #666; }
+      .label { font-family: Arial, sans-serif; font-size: 11px; text-anchor: middle; fill: #333; }
+      .label-sm { font-family: Arial, sans-serif; font-size: 9px; text-anchor: middle; fill: #555; }
+      .arrow-label { font-family: Arial, sans-serif; font-size: 8px; text-anchor: middle; fill: #666; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="750" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="600" y="25" class="title" text-anchor="middle">Gem Execution Data Flow</text>
+
+  <!-- Flow 1: Create/Manage Gem -->
+  <text x="40" y="60" class="flow-title">1. Create/Manage Gem Flow</text>
+
+  <g transform="translate(60, 80)">
+    <circle cx="15" cy="25" r="8" fill="#f5f5f5" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="33" x2="15" y2="50" stroke="#666" stroke-width="1.5"/>
+    <line x1="5" y1="38" x2="25" y2="38" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="50" x2="5" y2="70" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="50" x2="25" y2="70" stroke="#666" stroke-width="1.5"/>
+    <text x="15" y="85" class="label-sm">User</text>
+  </g>
+
+  <rect x="140" y="90" width="80" height="35" rx="4" fill="#bbdefb" stroke="#1976d2" stroke-width="1.5"/>
+  <text x="180" y="112" class="label-sm">React UI</text>
+
+  <rect x="260" y="90" width="70" height="35" rx="4" fill="#c8e6c9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="295" y="112" class="label-sm">OAuth</text>
+
+  <rect x="370" y="90" width="80" height="35" rx="4" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="410" y="105" class="label-sm">FastAPI</text>
+  <text x="410" y="117" class="label-sm">/api/gems</text>
+
+  <rect x="490" y="90" width="60" height="35" rx="4" fill="#ffcdd2" stroke="#c62828" stroke-width="1.5"/>
+  <text x="520" y="112" class="label-sm">RLS</text>
+
+  <ellipse cx="600" cy="107" rx="35" ry="20" fill="#c8e6c9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="600" y="110" class="label-sm">DB</text>
+
+  <line x1="85" y1="107" x2="140" y2="107" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="220" y1="107" x2="260" y2="107" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="330" y1="107" x2="370" y2="107" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="450" y1="107" x2="490" y2="107" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="550" y1="107" x2="565" y2="107" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Flow 2: Execute Gem -->
+  <text x="40" y="200" class="flow-title">2. Execute Gem Flow</text>
+
+  <g transform="translate(60, 220)">
+    <circle cx="15" cy="25" r="8" fill="#f5f5f5" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="33" x2="15" y2="50" stroke="#666" stroke-width="1.5"/>
+    <line x1="5" y1="38" x2="25" y2="38" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="50" x2="5" y2="70" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="50" x2="25" y2="70" stroke="#666" stroke-width="1.5"/>
+    <text x="15" y="85" class="label-sm">User</text>
+  </g>
+
+  <rect x="140" y="230" width="80" height="35" rx="4" fill="#bbdefb" stroke="#1976d2" stroke-width="1.5"/>
+  <text x="180" y="252" class="label-sm">GemChat</text>
+
+  <rect x="260" y="230" width="100" height="35" rx="4" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="310" y="245" class="label-sm">/api/gems</text>
+  <text x="310" y="257" class="label-sm">/execute</text>
+
+  <rect x="400" y="230" width="60" height="35" rx="4" fill="#ffcdd2" stroke="#c62828" stroke-width="1.5"/>
+  <text x="430" y="245" class="label-sm">Rate</text>
+  <text x="430" y="257" class="label-sm">Limit</text>
+
+  <rect x="500" y="230" width="70" height="35" rx="4" fill="#c8e6c9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="535" y="245" class="label-sm">Fetch</text>
+  <text x="535" y="257" class="label-sm">Gem</text>
+
+  <ellipse cx="630" cy="247" rx="40" ry="22" fill="#ffe0b2" stroke="#e65100" stroke-width="1.5"/>
+  <text x="630" y="242" class="label-sm">Gemini</text>
+  <text x="630" y="254" class="label-sm">API</text>
+
+  <rect x="710" y="230" width="60" height="35" rx="4" fill="#fff9c4" stroke="#fbc02d" stroke-width="1.5"/>
+  <text x="740" y="245" class="label-sm">Clean</text>
+  <text x="740" y="257" class="label-sm">Think</text>
+
+  <rect x="810" y="230" width="70" height="35" rx="4" fill="#e1bee7" stroke="#9c27b0" stroke-width="1.5"/>
+  <text x="845" y="252" class="label-sm">Response</text>
+
+  <line x1="85" y1="247" x2="140" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="220" y1="247" x2="260" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="360" y1="247" x2="400" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="460" y1="247" x2="500" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="570" y1="247" x2="590" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="670" y1="247" x2="710" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="770" y1="247" x2="810" y2="247" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Flow 3: MCP Integration -->
+  <text x="40" y="340" class="flow-title">3. MCP Integration Flow</text>
+
+  <rect x="60" y="360" width="100" height="35" rx="4" fill="#f5f5f5" stroke="#666" stroke-width="1.5"/>
+  <text x="110" y="382" class="label-sm">MCP Client</text>
+
+  <rect x="200" y="360" width="80" height="35" rx="4" fill="#ffe0b2" stroke="#e65100" stroke-width="1.5"/>
+  <text x="240" y="375" class="label-sm">Transport</text>
+  <text x="240" y="387" class="label-sm">STDIO/SSE</text>
+
+  <rect x="320" y="360" width="80" height="35" rx="4" fill="#fff9c4" stroke="#fbc02d" stroke-width="1.5"/>
+  <text x="360" y="382" class="label-sm">FastMCP</text>
+
+  <rect x="440" y="360" width="80" height="35" rx="4" fill="#bbdefb" stroke="#1976d2" stroke-width="1.5"/>
+  <text x="480" y="375" class="label-sm">MCP Tools</text>
+  <text x="480" y="387" class="label-sm">.list/get</text>
+
+  <rect x="560" y="360" width="60" height="35" rx="4" fill="#ffcdd2" stroke="#c62828" stroke-width="1.5"/>
+  <text x="590" y="382" class="label-sm">Auth</text>
+
+  <rect x="660" y="360" width="80" height="35" rx="4" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="700" y="382" class="label-sm">FastAPI</text>
+
+  <ellipse cx="800" cy="377" rx="35" ry="20" fill="#c8e6c9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="800" y="380" class="label-sm">DB</text>
+
+  <line x1="160" y1="377" x2="200" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="280" y1="377" x2="320" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="377" x2="440" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="520" y1="377" x2="560" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="620" y1="377" x2="660" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="740" y1="377" x2="765" y2="377" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Flow 4: Authentication -->
+  <text x="40" y="470" class="flow-title">4. Authentication Flow</text>
+
+  <g transform="translate(60, 490)">
+    <circle cx="15" cy="20" r="8" fill="#f5f5f5" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="28" x2="15" y2="45" stroke="#666" stroke-width="1.5"/>
+    <line x1="5" y1="33" x2="25" y2="33" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="45" x2="5" y2="65" stroke="#666" stroke-width="1.5"/>
+    <line x1="15" y1="45" x2="25" y2="65" stroke="#666" stroke-width="1.5"/>
+    <text x="15" y="80" class="label-sm">User</text>
+  </g>
+
+  <ellipse cx="160" cy="515" rx="35" ry="22" fill="#ffe0b2" stroke="#e65100" stroke-width="1.5"/>
+  <text x="160" y="512" class="label-sm">Google</text>
+  <text x="160" y="524" class="label-sm">OAuth</text>
+
+  <rect x="230" y="495" width="80" height="35" rx="4" fill="#c8e6c9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="270" y="517" class="label-sm">Supabase</text>
+
+  <rect x="350" y="495" width="60" height="35" rx="4" fill="#fff9c4" stroke="#fbc02d" stroke-width="1.5"/>
+  <text x="380" y="510" class="label-sm">JWT</text>
+  <text x="380" y="522" class="label-sm">Token</text>
+
+  <rect x="450" y="495" width="80" height="35" rx="4" fill="#bbdefb" stroke="#1976d2" stroke-width="1.5"/>
+  <text x="490" y="517" class="label-sm">Client</text>
+
+  <rect x="570" y="495" width="90" height="35" rx="4" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="615" y="510" class="label-sm">API Request</text>
+  <text x="615" y="522" class="label-sm">+ Token</text>
+
+  <rect x="700" y="495" width="60" height="35" rx="4" fill="#ffcdd2" stroke="#c62828" stroke-width="1.5"/>
+  <text x="730" y="517" class="label-sm">RLS</text>
+
+  <line x1="85" y1="515" x2="125" y2="515" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="195" y1="515" x2="230" y2="515" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="310" y1="512" x2="350" y2="512" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="410" y1="512" x2="450" y2="512" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="530" y1="512" x2="570" y2="512" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="660" y1="512" x2="700" y2="512" stroke="#666" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Legend -->
+  <rect x="40" y="600" width="1120" height="130" rx="8" fill="#f9f9f9" stroke="#ddd" stroke-width="1"/>
+  <text x="60" y="625" class="flow-title">Legend</text>
+
+  <circle cx="80" cy="655" r="12" fill="#f5f5f5" stroke="#666" stroke-width="1.5"/>
+  <text x="100" y="660" class="label" text-anchor="start">User/Actor</text>
+
+  <rect x="180" y="645" width="40" height="20" rx="3" fill="#bbdefb" stroke="#1976d2" stroke-width="1"/>
+  <text x="230" y="660" class="label" text-anchor="start">UI Component</text>
+
+  <rect x="330" y="645" width="40" height="20" rx="3" fill="#4caf50" stroke="#2e7d32" stroke-width="1"/>
+  <text x="380" y="660" class="label" text-anchor="start" fill="white">Backend API</text>
+
+  <ellipse cx="490" cy="655" rx="15" ry="10" fill="#c8e6c9" stroke="#388e3c" stroke-width="1"/>
+  <text x="515" y="660" class="label" text-anchor="start">Database</text>
+
+  <ellipse cx="590" cy="655" rx="15" ry="10" fill="#ffe0b2" stroke="#e65100" stroke-width="1"/>
+  <text x="615" y="660" class="label" text-anchor="start">External API</text>
+
+  <rect x="710" y="645" width="40" height="20" rx="3" fill="#fff9c4" stroke="#fbc02d" stroke-width="1"/>
+  <text x="760" y="660" class="label" text-anchor="start">MCP Component</text>
+
+  <rect x="870" y="645" width="50" height="20" rx="3" fill="#ffcdd2" stroke="#c62828" stroke-width="1"/>
+  <text x="930" y="660" class="label" text-anchor="start">Security/Rate Limit</text>
+
+  <text x="60" y="700" class="label-sm" text-anchor="start" fill="#666">Arrow direction = Data flow  |  Label = Protocol/Action</text>
+  <text x="600" y="700" class="label-sm" text-anchor="start" fill="#666">Authentication: OAuth → JWT Token → RLS Enforcement</text>
+</svg>
