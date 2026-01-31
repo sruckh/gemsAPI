@@ -313,7 +313,7 @@ async def get_gems(client: Client = Depends(get_user_supabase_client)):
 @app.post("/api/gems", response_model=GemModel)
 async def create_gem(gem: GemModel, client: Client = Depends(get_user_supabase_client)):
     try:
-        gem_data = gem.model_dump(exclude_unset=True)
+        gem_data = gem.model_dump(exclude={"updated_at"}, exclude_unset=True)
         # Supabase RLS will attach the user_id automatically if configured with default values or triggers,
         # but normally we rely on the auth context.
         response = client.table("gems").insert(gem_data).execute()
@@ -327,7 +327,7 @@ async def create_gem(gem: GemModel, client: Client = Depends(get_user_supabase_c
 @app.put("/api/gems/{gem_id}", response_model=GemModel)
 async def update_gem(gem_id: str, gem: GemModel, client: Client = Depends(get_user_supabase_client)):
     try:
-        gem_data = gem.model_dump(exclude={"id", "created_at"}, exclude_unset=True)
+        gem_data = gem.model_dump(exclude={"id", "created_at", "updated_at"}, exclude_unset=True)
         # Note: .select("*") is not supported on the filter builder returned by .eq() in some versions.
         # .execute() usually returns the data.
         response = client.table("gems").update(gem_data).eq("id", gem_id).execute()
