@@ -71,7 +71,7 @@ const AppContent: React.FC = () => {
   if (authState.loading) {
     return (
       <div className="flex h-screen bg-[#f8f9fa] dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden font-sans transition-colors duration-200">
-        <div className="flex items-center justify-center h-full">
+        <div className="flex flex-1 items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 border-t-transparent"></div>
             <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -85,7 +85,7 @@ const AppContent: React.FC = () => {
   if (!authState.user) {
     return (
       <div className="flex h-screen bg-[#f8f9fa] dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden font-sans transition-colors duration-200">
-        <div className="flex items-center justify-center h-full">
+        <div className="flex flex-1 items-center justify-center h-full">
           <div className="text-center max-w-md mx-auto p-8">
              <img src="/android-chrome-192x192.png" alt="GeminiGems" className="w-16 h-16 mx-auto mb-4" />
              <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">

@@ -10,11 +10,24 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  images?: ChatImage[];
 }
 
 export interface AppConfig {
   useLocalStorage: boolean;
   // Removed sensitive keys as they are now managed backend-side
+}
+
+export interface ChatImage {
+  dataUrl: string;
+  mimeType: string;
+  name?: string;
+}
+
+export interface ChatImagePayload {
+  data: string;
+  mime_type: string;
+  name?: string;
 }
 
 export type ViewMode = 'manager' | 'chat' | 'settings';

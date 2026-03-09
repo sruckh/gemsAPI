@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
+import type { Session } from '@supabase/supabase-js'
 import { checkAdminStatus, supabase } from '../services/authService'
 import { AuthState } from '../types'
 
@@ -29,13 +30,71 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin: false
   })
 
-  // Ref to track the last processed user ID to prevent redundant admin checks
-  const lastProcessedUserId = useRef<string | null>(null)
+  const adminCheckIdRef = useRef(0)
 
   useEffect(() => {
     console.log('[AuthContext] Initializing auth listener...')
-    
-    // Safety timeout: If Supabase doesn't respond within 3 seconds, stop loading
+
+    let isMounted = true
+
+    const clearAuthHash = () => {
+      if (!window.location.hash.includes('access_token=')) {
+        return
+      }
+
+      const cleanUrl = `${window.location.pathname}${window.location.search}`
+      window.history.replaceState({}, document.title, cleanUrl)
+    }
+
+    const applySession = async (session: Session | null) => {
+      const currentCheckId = ++adminCheckIdRef.current
+
+      if (!session?.user) {
+        console.log('[AuthContext] No user session.')
+        if (!isMounted) return
+
+        setAuthState({
+          user: null,
+          loading: false,
+          isAdmin: false
+        })
+        return
+      }
+
+      try {
+        console.log('[AuthContext] User found, checking admin status...')
+        const isAdmin = await checkAdminStatus(session.user.email || '')
+        console.log(`[AuthContext] Admin status: ${isAdmin}`)
+
+        if (!isMounted || currentCheckId !== adminCheckIdRef.current) return
+
+        clearAuthHash()
+        setAuthState({
+          user: {
+            id: session.user.id,
+            email: session.user.email || '',
+            user_metadata: session.user.user_metadata || {}
+          },
+          loading: false,
+          isAdmin
+        })
+      } catch (error) {
+        console.error('[AuthContext] Error checking admin status:', error)
+        if (!isMounted || currentCheckId !== adminCheckIdRef.current) return
+
+        clearAuthHash()
+        setAuthState({
+          user: {
+            id: session.user.id,
+            email: session.user.email || '',
+            user_metadata: session.user.user_metadata || {}
+          },
+          loading: false,
+          isAdmin: false
+        })
+      }
+    }
+
     const timeoutId = setTimeout(() => {
       setAuthState(prev => {
         if (prev.loading) {
@@ -44,62 +103,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         return prev
       })
-    }, 3000)
+    }, 5000)
 
-    // supabase.auth.onAuthStateChange handles the initial check and all subsequent auth events.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[AuthContext] Auth event: ${event}`, session?.user?.id)
-      const currentUserId = session?.user?.id || null
-
-      // Optimization: If user hasn't changed, skip re-fetching admin status.
-      // This prevents double-firing on initial load (INITIAL_SESSION + SIGNED_IN).
-      if (currentUserId === lastProcessedUserId.current) {
-        console.log('[AuthContext] User unchanged, skipping update.')
-        return
-      }
-
-      lastProcessedUserId.current = currentUserId
-
-      if (session?.user) {
-        try {
-          console.log('[AuthContext] User found, checking admin status...')
-          // User is logged in, check admin status
-          const isAdmin = await checkAdminStatus(session.user.email || '')
-          console.log(`[AuthContext] Admin status: ${isAdmin}`)
-          
-          setAuthState({
-            user: {
-              id: session.user.id,
-              email: session.user.email || '',
-              user_metadata: session.user.user_metadata || {}
-            },
-            loading: false,
-            isAdmin
-          })
-        } catch (error) {
-          console.error('[AuthContext] Error checking admin status:', error)
-          setAuthState({
-            user: {
-              id: session.user.id,
-              email: session.user.email || '',
-              user_metadata: session.user.user_metadata || {}
-            },
-            loading: false,
-            isAdmin: false
-          })
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          throw error
         }
-      } else {
-        console.log('[AuthContext] No user session.')
-        // No session (logged out or initial load failed)
+        return applySession(data.session)
+      })
+      .catch((error) => {
+        console.error('[AuthContext] Failed to get initial session:', error)
+        if (!isMounted) return
         setAuthState({
           user: null,
           loading: false,
           isAdmin: false
         })
-      }
+      })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`[AuthContext] Auth event: ${event}`, session?.user?.id)
+      void applySession(session)
     })
 
     return () => {
+      isMounted = false
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
@@ -134,7 +163,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setAuthState(prev => ({ ...prev, loading: true }))
     try {
       await supabase.auth.signOut()
-      lastProcessedUserId.current = null // Reset tracker on sign out
     } catch (error) {
       console.error('Sign out error:', error)
       setAuthState(prev => ({ ...prev, loading: false }))

@@ -31,7 +31,7 @@
   - `env_file: .env` and a volume for the built assets if needed.
   - Note: NPM defined elsewhere, also on `shared_net`, targets `gemsapi:8000`.
 - `.env.example` documenting required variables:
-  - `GEMINI_API_KEY`, `GEMINI_MODEL` (e.g. `gemini-3-pro-preview`), `SUPABASE_URL`, `SUPABASE_KEY` (Service Role), `PORT=8000`, `NODE_ENV=production`.
+  - `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` (e.g. `gemini-3.1-flash-lite-preview`), `GEMINI_IMAGE_MODEL` (e.g. `gemini-3.1-flash-image-preview`), `SUPABASE_URL`, `SUPABASE_KEY` (Service Role), `PORT=8000`, `NODE_ENV=production`.
 - `docs/supabase/gems_table.sql`: The canonical DDL for `gems` table and RLS policies.
 - Backend updates:
   - Implement FastAPI routes that proxy Gemini and Supabase actions; move existing client-side Supabase/Gemini calls to backend.

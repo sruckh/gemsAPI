@@ -3,7 +3,8 @@ import logging
 import re
 import traceback
 import hashlib
-from typing import Optional, List, Union, Callable, Awaitable
+import base64
+from typing import Optional, List, Union, Callable, Awaitable, Tuple
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status
@@ -11,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from google import genai
@@ -28,7 +29,10 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
+MODEL_CONFIG = {
+    "text": os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite-preview"),
+    "image": os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview"),
+}
 PORT = int(os.getenv("PORT", 8000))
 NODE_ENV = os.getenv("NODE_ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
@@ -107,15 +111,22 @@ class GemModel(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+class ImageInput(BaseModel):
+    data: str
+    mime_type: str
+    name: Optional[str] = None
+
 class GenerateRequest(BaseModel):
-    model_name: Optional[str] = DEFAULT_GEMINI_MODEL
+    model_name: Optional[str] = MODEL_CONFIG["text"]
     system_instructions: str
     user_prompt: str
+    images: List[ImageInput] = Field(default_factory=list)
+    generate_images: bool = False
 
 class ExecuteGemRequest(BaseModel):
     gem_name: str
     user_prompt: str
-    model_name: Optional[str] = DEFAULT_GEMINI_MODEL
+    model_name: Optional[str] = MODEL_CONFIG["text"]
 
 class AuthCheckRequest(BaseModel):
     email: str
@@ -258,37 +269,143 @@ def _ensure_secrets_not_exposed():
                     # Non-fatal read issues; continue scanning but log for visibility without secrets.
                     logger.warning(f"Skipped secret scan for {path}: {e}")
 
-async def generate_gemini_response(model_name: str, system_instructions: str, user_prompt: str) -> str:
+def _extract_response_parts(response: types.GenerateContentResponse) -> List:
+    parts = list(getattr(response, "parts", []) or [])
+    if parts:
+        return parts
+
+    extracted_parts = []
+    for candidate in getattr(response, "candidates", []) or []:
+        content = getattr(candidate, "content", None)
+        candidate_parts = getattr(content, "parts", None) if content else None
+        if candidate_parts:
+            extracted_parts.extend(candidate_parts)
+
+    return extracted_parts
+
+def _extract_response_payload(response: types.GenerateContentResponse) -> Tuple[str, List[dict]]:
+    text_parts: List[str] = []
+    images: List[dict] = []
+
+    for part in _extract_response_parts(response):
+        part_text = getattr(part, "text", None)
+        if part_text:
+            text_parts.append(part_text)
+
+        inline_data = getattr(part, "inline_data", None)
+        if not inline_data or not getattr(inline_data, "data", None):
+            continue
+
+        encoded_data = base64.b64encode(inline_data.data).decode("utf-8")
+        images.append({
+            "mime_type": getattr(inline_data, "mime_type", "image/png"),
+            "data": encoded_data,
+        })
+
+    raw_text = "\n\n".join(part.strip() for part in text_parts if part and part.strip())
+    if not raw_text:
+        raw_text = response.text if response.text else ""
+
+    return clean_thought_text(raw_text), images
+
+def _log_empty_gemini_response(
+    *,
+    response: types.GenerateContentResponse,
+    selected_model: str,
+    generate_images: bool,
+) -> None:
+    prompt_feedback = getattr(response, "prompt_feedback", None)
+    usage_metadata = getattr(response, "usage_metadata", None)
+    candidates = getattr(response, "candidates", []) or []
+
+    logger.warning(
+        "Gemini returned empty content. model=%s generate_images=%s candidates=%s block_reason=%s finish_reasons=%s usage=%s",
+        selected_model,
+        generate_images,
+        len(candidates),
+        getattr(prompt_feedback, "block_reason", None),
+        [getattr(candidate, "finish_reason", None) for candidate in candidates],
+        usage_metadata,
+    )
+
+def _build_gemini_contents(user_prompt: str, images: List[ImageInput]) -> List[Union[str, types.Part]]:
+    contents: List[Union[str, types.Part]] = [user_prompt]
+
+    for image in images:
+        try:
+            image_bytes = base64.b64decode(image.data)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid image payload for '{image.name or 'upload'}'") from exc
+
+        contents.append(
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=image.mime_type,
+            )
+        )
+
+    return contents
+
+async def generate_gemini_response(
+    model_name: str,
+    system_instructions: str,
+    user_prompt: str,
+    images: Optional[List[ImageInput]] = None,
+    generate_images: bool = False,
+) -> Tuple[str, List[dict]]:
     if not gemini_client:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
-    if model_name == "gemini-1.5-flash":
-        logger.warning(f"Model '{model_name}' not found/supported. Falling back to DEFAULT_GEMINI_MODEL: {DEFAULT_GEMINI_MODEL}")
-        model_name = DEFAULT_GEMINI_MODEL
+    has_input_images = bool(images)
+    use_image_model = generate_images or has_input_images
+    selected_model = model_name or (MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"])
 
-    if not model_name:
-        model_name = DEFAULT_GEMINI_MODEL
+    if selected_model == "gemini-1.5-flash":
+        logger.warning(
+            "Model '%s' not found/supported. Falling back to %s model: %s",
+            model_name,
+            "image" if use_image_model else "text",
+            MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"],
+        )
+        selected_model = MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"]
 
     try:
         config = types.GenerateContentConfig(
             system_instruction=system_instructions
         )
 
-        if "gemini-3" in model_name.lower():
+        if generate_images:
+            config.response_modalities = ["TEXT", "IMAGE"]
+
+        if "gemini-3" in selected_model.lower():
              config.thinking_config = types.ThinkingConfig(
                  thinking_level=types.ThinkingLevel.LOW,
                  include_thoughts=True
              )
 
+        contents = _build_gemini_contents(user_prompt, images or [])
+
         response = await gemini_client.aio.models.generate_content(
-            model=model_name,
-            contents=user_prompt,
+            model=selected_model,
+            contents=contents,
             config=config
         )
 
-        raw_text = response.text if response.text else ""
-        final_output = clean_thought_text(raw_text)
-        return final_output
+        final_output, images_payload = _extract_response_payload(response)
+        if not final_output and not images_payload:
+            _log_empty_gemini_response(
+                response=response,
+                selected_model=selected_model,
+                generate_images=use_image_model,
+            )
+            fallback_message = (
+                "The model returned no text or images for this request."
+                if use_image_model
+                else "The model returned no text for this request."
+            )
+            return fallback_message, []
+
+        return final_output, images_payload
 
     except Exception as e:
         logger.error(f"Gemini API Error: {e}")
@@ -417,12 +534,14 @@ async def get_gem_package(identifier: str, request: Request, client: Client = De
 @app.post("/api/gemini/generate")
 @limiter.limit("5/minute")
 async def generate_content(request: Request, body: GenerateRequest):
-    text = await generate_gemini_response(
+    text, images = await generate_gemini_response(
         model_name=body.model_name,
         system_instructions=body.system_instructions,
-        user_prompt=body.user_prompt
+        user_prompt=body.user_prompt,
+        images=body.images,
+        generate_images=body.generate_images
     )
-    return {"text": text}
+    return {"text": text, "images": images}
 
 # Named Gem Execution Endpoint
 # Should respect RLS for fetching the Gem instructions
@@ -446,13 +565,13 @@ async def execute_gem_by_name(
         logger.error(f"Error looking up gem '{body.gem_name}': {e}")
         raise HTTPException(status_code=500, detail="Database lookup failed")
 
-    text = await generate_gemini_response(
+    text, images = await generate_gemini_response(
         model_name=body.model_name,
         system_instructions=instructions,
         user_prompt=body.user_prompt
     )
     
-    return {"text": text}
+    return {"text": text, "images": images}
 
 # --- MCP / LLM-friendly endpoints (read-only first phase) ---
 if ENABLE_MCP and mcp_server is not None:

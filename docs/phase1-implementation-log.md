@@ -22,7 +22,7 @@ Phase 1 (Single-Container Dockerization) has been completed. The application has
 - **Rate Limiting:** Implemented `slowapi` on the generation endpoint.
 
 ### 4. Configuration
-- **Model Selection:** Added `GEMINI_MODEL` to `.env` and `.env.example`. The backend defaults to this variable, allowing easy model swapping without code changes.
+- **Model Selection:** Added `GEMINI_TEXT_MODEL` and `GEMINI_IMAGE_MODEL` to `.env` and `.env.example`. The backend defaults to these variables, allowing text and image model swaps without code changes.
 - **Docker:** Created `Dockerfile` (multi-stage) and `docker-compose.yml` configured for the `shared_net` network.
 - **Ignore Files:** Updated `.gitignore` and `.dockerignore` to exclude `.serena/` and secrets.
 
