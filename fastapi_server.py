@@ -30,8 +30,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_CONFIG = {
-    "text": os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite-preview"),
-    "image": os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview"),
+    "text": os.getenv("GEMINI_TEXT_MODEL", "gemini-flash-latest"),
+    "image": os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image"),
+    "pro_image": os.getenv("GEMINI_PRO_IMAGE_MODEL", "gemini-3-pro-image"),
 }
 PORT = int(os.getenv("PORT", 8000))
 NODE_ENV = os.getenv("NODE_ENV", "development")
@@ -358,16 +359,24 @@ async def generate_gemini_response(
 
     has_input_images = bool(images)
     use_image_model = generate_images or has_input_images
-    selected_model = model_name or (MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"])
+
+    if model_name:
+        selected_model = model_name
+    elif generate_images:
+        selected_model = MODEL_CONFIG["pro_image"]
+    elif has_input_images:
+        selected_model = MODEL_CONFIG["image"]
+    else:
+        selected_model = MODEL_CONFIG["text"]
 
     if selected_model == "gemini-1.5-flash":
         logger.warning(
             "Model '%s' not found/supported. Falling back to %s model: %s",
             model_name,
-            "image" if use_image_model else "text",
-            MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"],
+            "pro_image" if generate_images else ("image" if has_input_images else "text"),
+            selected_model,
         )
-        selected_model = MODEL_CONFIG["image"] if use_image_model else MODEL_CONFIG["text"]
+        selected_model = MODEL_CONFIG["pro_image"] if generate_images else (MODEL_CONFIG["image"] if has_input_images else MODEL_CONFIG["text"])
 
     try:
         config = types.GenerateContentConfig(

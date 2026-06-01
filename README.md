@@ -97,8 +97,9 @@ SUPABASE_KEY=your_supabase_service_role_key
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Optional (with defaults)
-GEMINI_TEXT_MODEL=gemini-3.1-flash-lite-preview
-GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
+GEMINI_TEXT_MODEL=gemini-flash-latest
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image
+GEMINI_PRO_IMAGE_MODEL=gemini-3-pro-image
 PORT=8000
 NODE_ENV=production
 
@@ -199,8 +200,9 @@ Notes:
 | `SUPABASE_URL` | Supabase project URL | *required* |
 | `SUPABASE_KEY` | Supabase service role key | *required* |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key exposed to the frontend build | *required for web UI* |
-| `GEMINI_TEXT_MODEL` | Default model for text-only chats | `gemini-3.1-flash-lite-preview` |
-| `GEMINI_IMAGE_MODEL` | Default model for image analysis or image-capable chats | `gemini-3.1-flash-image-preview` |
+| `GEMINI_TEXT_MODEL` | Default model for text-only chats | `gemini-flash-latest` |
+| `GEMINI_IMAGE_MODEL` | Default model for image input/analysis | `gemini-3.1-flash-image` |
+| `GEMINI_PRO_IMAGE_MODEL` | Default model for image generation | `gemini-3-pro-image` |
 | `PORT` | Server port | `8000` |
 | `NODE_ENV` | Environment mode | `production` |
 | `ENABLE_MCP` | Enable MCP integration | `false` |
