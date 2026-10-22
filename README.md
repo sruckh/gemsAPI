@@ -180,10 +180,8 @@ Notes:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/.well-known/mcp.json` | MCP manifest |
-| `GET` | `/mcp` | MCP SSE transport endpoint |
+| `POST` | `/mcp` | MCP streamable HTTP endpoint (URL + Bearer token) |
 | `GET` | `/api/mcp/ping` | MCP auth check |
-| `GET` | `/api/mcp/stdio-script` | Download STDIO script for Claude Desktop |
-| `GET` | `/api/mcp/claude-desktop-config` | Claude Desktop configuration |
 
 #### Authentication
 
@@ -222,46 +220,44 @@ For the complete database schema with all tables, relationships, and RLS policie
 
 gemsAPI provides Model Context Protocol (MCP) integration for tool-based access to gems.
 
-#### Claude Desktop Setup
+#### Claude Desktop / Any MCP Client (Remote)
 
-1. Download the STDIO script:
+The MCP server speaks standard streamable HTTP at `/mcp`. No local install, no scripts — just a URL and a token. Works the same on Windows, macOS and Linux.
+
+**Claude Desktop / claude.ai:**
+
+1. Settings → Connectors → Add custom connector
+2. **Remote MCP server URL**: `https://your-domain.com/mcp`
+3. Under **Authentication → Request headers**, add a header:
+   - Name: `Authorization`
+   - Value: `Bearer YOUR_TOKEN`
+
+**Claude Code:**
+
 ```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://your-domain.com/api/mcp/stdio-script \
-  -o gemsapi_mcp.py
+claude mcp add --transport http gemsapi https://your-domain.com/mcp --header "Authorization: Bearer YOUR_TOKEN"
 ```
 
-2. Edit your Claude Desktop config:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Cursor and other MCP clients** (`.mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "gemsapi": {
-      "command": "python",
-      "args": ["/path/to/gemsapi_mcp.py"],
-      "env": {
-        "GEMSAPI_TOKEN": "YOUR_SUPABASE_ACCESS_TOKEN",
-        "GEMSAPI_URL": "https://your-domain.com"
-      }
+      "type": "http",
+      "url": "https://your-domain.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
     }
   }
 }
 ```
 
-3. Install dependencies:
-```bash
-pip install fastmcp httpx
-```
-
-4. Restart Claude Desktop
+Tokens: the server's `API_TOKEN`, or any valid Supabase access token — gems are filtered per-user (RLS) based on the token.
 
 #### Available MCP Tools
 
 - `gems.list`: List all gems for authenticated user
 - `gems.get`: Get a specific gem by ID or name
-- `gems.search`: Search gems by name or description
 
 ### Web Chat Behavior
 

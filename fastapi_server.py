@@ -21,6 +21,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_http_headers
 
 # Load environment variables
 load_dotenv()
@@ -153,7 +154,6 @@ class MCPManifest(BaseModel):
     tools: List[str]
     auth: dict
     transports: Optional[dict] = None
-    claude_desktop: Optional[dict] = None
 
 # --- Middleware ---
 allowed_origins = []
@@ -591,17 +591,19 @@ if ENABLE_MCP and mcp_server is not None:
         """Auth check for MCP clients; returns ok if bearer is valid."""
         return {"status": "ok", "user": user_email}
 
+    def _mcp_client() -> Client:
+        """Supabase client for the MCP caller, per the request's Authorization header."""
+        auth = get_http_headers(include={"authorization"}).get("authorization", "")
+        token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        if not token:
+            raise ValueError("Missing Authorization: Bearer <token> header")
+        return _supabase_client_for_token(token)
+
     # Register MCP tools (mcp_server already created at top for lifespan integration)
     @mcp_server.tool("gems.list")
     async def mcp_list() -> dict:
         """List all gems for the authenticated user."""
-        # For MCP integration, we use API_TOKEN as the auth mechanism
-        # MCP doesn't properly expose request headers in FastMCP v2.3.2
-        auth_token = API_TOKEN  # Use the global API_TOKEN
-        if not auth_token:
-            raise ValueError("API_TOKEN not configured for MCP access")
-
-        client = _supabase_client_for_token(auth_token)
+        client = _mcp_client()
 
         response = client.table("gems").select("id,name,description,created_at").order("created_at", desc=True).execute()
         data = response.data or []
@@ -613,12 +615,7 @@ if ENABLE_MCP and mcp_server is not None:
     @mcp_server.tool("gems.get")
     async def mcp_get(identifier: str) -> dict:
         """Get a specific gem by ID or name."""
-        # Use API_TOKEN for authentication in MCP context
-        auth_token = API_TOKEN
-        if not auth_token:
-            raise ValueError("API_TOKEN not configured for MCP access")
-
-        client = _supabase_client_for_token(auth_token)
+        client = _mcp_client()
 
         gem = _fetch_gem_by_identifier(client, identifier)
         if not gem:
@@ -643,196 +640,21 @@ if ENABLE_MCP and mcp_server is not None:
             description="MCP interface for Gems stored in Supabase",
             server_url=f"{base}/mcp",
             resources=["gems://list", "gems://{identifier}"],
-            tools=["gems.list", "gems.get", "gems.search"],
+            tools=["gems.list", "gems.get"],
             auth={
                 "type": "bearer",
                 "header": "Authorization",
                 "format": "Bearer <token>"
             },
             transports={
-                "sse": {
+                "http": {
                     "url": f"{base}/mcp",
-                    "description": "Server-Sent Events transport for HTTP clients (Cursor, web)"
-                },
-                "stdio": {
-                    "script_url": f"{base}/api/mcp/stdio-script",
-                    "description": "Download STDIO script for Claude Desktop"
+                    "description": "Streamable HTTP (stateless). Point any MCP client here with an Authorization: Bearer header — no local install needed."
                 }
-            },
-            claude_desktop={
-                "setup_guide": f"{base}/api/mcp/claude-desktop-config",
-                "requirements": ["python>=3.10", "fastmcp", "httpx"],
-                "note": "Claude Desktop requires local STDIO transport. Download the script and configure as shown."
             }
         )
-
-    # Serve the STDIO MCP script for Claude Desktop users
-    @app.get("/api/mcp/stdio-script")
-    async def get_mcp_stdio_script(request: Request):
-        """Download the MCP STDIO server script for Claude Desktop integration."""
-        from fastapi.responses import Response
-        
-        base = str(request.base_url).rstrip("/")
-        
-        script = f'''#!/usr/bin/env python3
-"""
-GemsAPI MCP Server - STDIO Transport for Claude Desktop
-
-Setup:
-    1. Install dependencies: pip install fastmcp httpx
-    2. Set environment variable: export GEMSAPI_TOKEN="your_token_here"
-    3. Run: python gemsapi_mcp.py
-
-Or configure in Claude Desktop's claude_desktop_config.json
-"""
-
-import os
-import sys
-import httpx
-from typing import Optional
-from fastmcp import FastMCP
-
-# Configuration
-GEMSAPI_URL = os.getenv("GEMSAPI_URL", "{base}")
-GEMSAPI_TOKEN = os.getenv("GEMSAPI_TOKEN")
-
-# Create MCP server
-mcp = FastMCP(name="gemsapi", version="0.2.0")
-
-# Lazy HTTP client
-_http_client: Optional[httpx.Client] = None
-
-def get_client() -> httpx.Client:
-    global _http_client
-    if _http_client is None:
-        if not GEMSAPI_TOKEN:
-            raise ValueError("GEMSAPI_TOKEN not set")
-        _http_client = httpx.Client(
-            base_url=GEMSAPI_URL,
-            headers={{"Authorization": f"Bearer {{GEMSAPI_TOKEN}}", "Content-Type": "application/json"}},
-            timeout=30.0,
-        )
-    return _http_client
-
-
-@mcp.tool
-def list_gems() -> dict:
-    """List all gems for the authenticated user."""
-    try:
-        response = get_client().get("/api/gems")
-        response.raise_for_status()
-        data = response.json()
-        gems = data if isinstance(data, list) else data.get("gems", data)
-        return {{"gems": [{{"id": g.get("id"), "name": g.get("name"), "description": g.get("description")}} for g in gems]}}
-    except Exception as e:
-        return {{"error": str(e)}}
-
-
-@mcp.tool
-def get_gem(identifier: str) -> dict:
-    """Get a specific gem by ID or name."""
-    try:
-        response = get_client().get(f"/api/gems/{{identifier}}/package")
-        response.raise_for_status()
-        return response.json()
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return {{"error": "Gem not found", "identifier": identifier}}
-        return {{"error": f"API error: {{e.response.status_code}}"}}
-    except Exception as e:
-        return {{"error": str(e)}}
-
-
-@mcp.tool
-def search_gems(query: str) -> dict:
-    """Search for gems by name or description."""
-    try:
-        response = get_client().get("/api/gems")
-        response.raise_for_status()
-        data = response.json()
-        gems = data if isinstance(data, list) else data.get("gems", data)
-        q = query.lower()
-        matching = [
-            {{"id": g.get("id"), "name": g.get("name"), "description": g.get("description")}}
-            for g in gems
-            if q in g.get("name", "").lower() or q in (g.get("description") or "").lower()
-        ]
-        return {{"gems": matching, "query": query, "count": len(matching)}}
-    except Exception as e:
-        return {{"error": str(e)}}
-
-
-if __name__ == "__main__":
-    if not GEMSAPI_TOKEN:
-        print("Error: GEMSAPI_TOKEN environment variable required", file=sys.stderr)
-        sys.exit(1)
-    mcp.run()
-'''
-        return Response(
-            content=script,
-            media_type="text/x-python",
-            headers={
-                "Content-Disposition": "attachment; filename=gemsapi_mcp.py",
-                "Cache-Control": "no-cache"
-            }
-        )
-
-    # Provide Claude Desktop configuration example
-    @app.get("/api/mcp/claude-desktop-config")
-    async def get_claude_desktop_config(request: Request):
-        """Get the Claude Desktop configuration for GemsAPI MCP integration."""
-        base = str(request.base_url).rstrip("/")
-        
-        return {
-            "instructions": [
-                "1. Download the MCP script from: " + f"{base}/api/mcp/stdio-script",
-                "2. Save it as 'gemsapi_mcp.py' in a permanent location",
-                "3. Install dependencies: pip install fastmcp httpx",
-                "4. Edit your Claude Desktop config file:",
-                "   - macOS: ~/Library/Application Support/Claude/claude_desktop_config.json",
-                "   - Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
-                "5. Add the configuration below and restart Claude Desktop",
-            ],
-            "config_example": {
-                "mcpServers": {
-                    "gemsapi": {
-                        "command": "python",
-                        "args": ["/path/to/gemsapi_mcp.py"],
-                        "env": {
-                            "GEMSAPI_TOKEN": "YOUR_SUPABASE_ACCESS_TOKEN",
-                            "GEMSAPI_URL": base
-                        }
-                    }
-                }
-            },
-            "alternative_with_uv": {
-                "mcpServers": {
-                    "gemsapi": {
-                        "command": "uv",
-                        "args": [
-                            "run",
-                            "--with", "fastmcp",
-                            "--with", "httpx",
-                            "python",
-                            "/path/to/gemsapi_mcp.py"
-                        ],
-                        "env": {
-                            "GEMSAPI_TOKEN": "YOUR_SUPABASE_ACCESS_TOKEN",
-                            "GEMSAPI_URL": base
-                        }
-                    }
-                }
-            },
-            "notes": [
-                "Replace /path/to/gemsapi_mcp.py with the actual path where you saved the script",
-                "Replace YOUR_SUPABASE_ACCESS_TOKEN with your actual Supabase access token",
-                "The 'uv' alternative auto-installs dependencies but requires uv to be installed"
-            ]
-        }
-
-    # Mount FastMCP server with SSE transport
-    # Create the ASGI app with SSE transport for backward compatibility
-    mcp_app = mcp_server.http_app(path="/", transport="sse")
+    # Mount FastMCP over streamable HTTP (stateless: no session handshake, works with every MCP client)
+    mcp_app = mcp_server.http_app(path="/", stateless_http=True)
     app.mount("/mcp", mcp_app, name="mcp")
 
 # --- Authentication Endpoints ---
