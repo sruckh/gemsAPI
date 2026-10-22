@@ -164,6 +164,18 @@ elif FRONTEND_URL:
 else:
     logger.warning("NODE_ENV is production but FRONTEND_URL is not set. CORS might block requests.")
 
+class _MCPSlashFix:
+    """Starlette's Mount("/mcp") doesn't match the bare path "/mcp", but MCP
+    clients POST exactly to the advertised URL — rewrite it to "/mcp/"."""
+    def __init__(self, app):
+        self.app = app
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"] == "/mcp":
+            scope["path"] = "/mcp/"
+        await self.app(scope, receive, send)
+
+app.add_middleware(_MCPSlashFix)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins, 
